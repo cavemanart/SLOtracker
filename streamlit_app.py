@@ -32,11 +32,21 @@ elif mode == "Manual Data Input":
         "total_count": [1000, 1000],
         "latency_p95": [280, 290],
     }
-    df = st.data_editor(default_data, num_rows="dynamic", use_container_width=True)
+    edited = st.data_editor(default_data, num_rows="dynamic", use_container_width=True)
+    df = pd.DataFrame(edited)  # Explicitly convert to DataFrame
 
 if df is not None:
-    # Ensure 'timestamp' column is datetime dtype
+    # Safety check: Ensure df is a DataFrame
+    if not hasattr(df, 'head'):
+        df = pd.DataFrame(df)
+
+    # Convert timestamp column to datetime, coerce errors
     df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+
+    # Warn if timestamp conversion failed
+    if df['timestamp'].isnull().any():
+        st.warning("Warning: Some timestamps could not be parsed and are set as NaT.")
+
     st.subheader("Raw Metrics Preview")
     st.dataframe(df.head())
 
@@ -55,3 +65,5 @@ if df is not None:
                 st.metric(label=slo['name'], value=status)
             with col2:
                 plot_sli_trends(df, slo)
+else:
+    st.info("Please upload an Excel file or enter manual data to get started.")
