@@ -1,7 +1,7 @@
 import sys
 import os
 
-# Add 'core' folder to Python module search path
+# Add 'core' folder to Python path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), 'core'))
 
 from parser import parse_excel
@@ -15,11 +15,28 @@ import yaml
 st.set_page_config(page_title="SLO Dashboard", layout="wide")
 st.title("📊 SLO Compliance Dashboard")
 
-uploaded_file = st.file_uploader("Upload your Excel metrics file", type=[".xlsx"])
+mode = st.radio("Select input mode:", ["Upload Excel file", "Manual Data Input"])
 
-if uploaded_file:
-    df = parse_excel(uploaded_file)
+df = None
 
+if mode == "Upload Excel file":
+    uploaded_file = st.file_uploader("Upload your Excel metrics file", type=[".xlsx"])
+    if uploaded_file is not None:
+        df = parse_excel(uploaded_file)
+
+elif mode == "Manual Data Input":
+    default_data = {
+        "timestamp": ["2025-07-01 00:00:00", "2025-07-02 00:00:00"],
+        "metric_name": ["auth_api_availability", "auth_api_availability"],
+        "success_count": [995, 997],
+        "total_count": [1000, 1000],
+        "latency_p95": [280, 290],
+    }
+    df = st.data_editor(default_data, num_rows="dynamic", use_container_width=True)
+
+if df is not None:
+    # Ensure 'timestamp' column is datetime dtype
+    df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
     st.subheader("Raw Metrics Preview")
     st.dataframe(df.head())
 
