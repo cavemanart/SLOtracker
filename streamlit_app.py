@@ -31,3 +31,5 @@ if uploaded_file:
                 st.metric(label=slo['name'], value=status)
             with col2:
                 plot_sli_trends(df, slo)
+
+#test
