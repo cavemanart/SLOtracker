@@ -1,5 +1,6 @@
 import sys
 import os
+import pathlib
 
 # Add 'core' folder to Python path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), 'core'))
@@ -36,21 +37,19 @@ elif mode == "Manual Data Input":
     df = pd.DataFrame(edited)  # Explicitly convert to DataFrame
 
 if df is not None:
-    # Safety check: Ensure df is a DataFrame
     if not hasattr(df, 'head'):
         df = pd.DataFrame(df)
 
-    # Convert timestamp column to datetime, coerce errors
     df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
 
-    # Warn if timestamp conversion failed
     if df['timestamp'].isnull().any():
         st.warning("Warning: Some timestamps could not be parsed and are set as NaT.")
 
     st.subheader("Raw Metrics Preview")
     st.dataframe(df.head())
 
-    with open("config/slo_definitions.yaml", "r") as f:
+    config_path = pathlib.Path(__file__).parent / "config" / "slo_definitions.yaml"
+    with open(config_path, "r") as f:
         slo_config = yaml.safe_load(f)
 
     results = evaluate_slos(df, slo_config)
