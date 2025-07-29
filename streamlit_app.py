@@ -1,9 +1,16 @@
+import sys
+import os
+
+# Add 'core' folder to Python module search path
+sys.path.append(os.path.join(os.path.dirname(__file__), 'core'))
+
+from parser import parse_excel
+from calculator import evaluate_slos
+from visualizer import plot_sli_trends
+
 import streamlit as st
 import pandas as pd
 import yaml
-from core.parser import parse_excel
-from core.calculator import evaluate_slos
-from core.visualizer import plot_sli_trends
 
 st.set_page_config(page_title="SLO Dashboard", layout="wide")
 st.title("📊 SLO Compliance Dashboard")
@@ -31,5 +38,3 @@ if uploaded_file:
                 st.metric(label=slo['name'], value=status)
             with col2:
                 plot_sli_trends(df, slo)
-
-#test
