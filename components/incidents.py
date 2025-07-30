@@ -1,32 +1,27 @@
+import streamlit as st
+import pandas as pd
+import datetime
+
 def render_incident_tracker():
     st.subheader("🛠️ Incident Tracker")
 
-    incidents = load_data("incidents")  # FIX: Make sure this loads a list
-    if incidents is None or not isinstance(incidents, list):
-        incidents = []
+    # Upload Incident CSV
+    uploaded_file = st.file_uploader("Upload Incident CSV", type="csv", key="incident_upload")
 
-    if incidents:
-        df = pd.DataFrame(incidents)
-        st.dataframe(df)
+    if uploaded_file:
+        try:
+            df = pd.read_csv(uploaded_file)
+            st.write("🔍 Raw Incident Data", df)
+
+            if "timestamp" in df.columns:
+                df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+                df["date"] = df["timestamp"].dt.date
+
+                daily_counts = df.groupby("date").size()
+                st.line_chart(daily_counts)
+            else:
+                st.warning("⚠️ CSV is missing 'timestamp' column.")
+        except Exception as e:
+            st.error(f"❌ Failed to process CSV: {e}")
     else:
-        st.info("No incidents recorded yet.")
-
-    with st.form("incident_form"):
-        st.write("Log a new incident")
-        title = st.text_input("Title")
-        severity = st.selectbox("Severity", ["Low", "Medium", "High", "Critical"])
-        reported_by = st.text_input("Reported By")
-        description = st.text_area("Description")
-
-        submitted = st.form_submit_button("Log Incident")
-        if submitted:
-            new_incident = {
-                "title": title,
-                "severity": severity,
-                "reported_by": reported_by,
-                "description": description,
-                "timestamp": datetime.datetime.now().isoformat()
-            }
-            incidents.append(new_incident)
-            save_data("incidents", incidents)
-            st.success("Incident logged!")
+        st.info("📄 Upload a CSV file to view incident trends.")
