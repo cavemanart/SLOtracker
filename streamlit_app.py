@@ -1,25 +1,12 @@
-import streamlit as st
-from components import input_slo, dashboard, trends, incidents, postmortems
-from core.utils import load_styles
+slotracker/streamlit_app.py
 
-load_styles()
+import streamlit as st from core.utils import load_styles from components.input_slo import render_slo_input from components.dashboard import render_dashboard from components.trends import render_trend_charts from components.incidents import render_incident_tracker from components.postmortems import render_postmortem_tracker
 
-st.set_page_config(page_title="SLOTracker Pro", layout="wide")
+st.set_page_config(page_title="SLOTracker Pro", layout="wide") load_styles()
 
-st.title("📊 SLOTracker Pro")
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["📥 Input SLOs", "📈 Dashboard", "📉 Trends", "🚨 Incidents", "📜 Postmortems"])
+st.title("📈 SLOTracker Pro")
 
-with tab1:
-    input_slo.render()
+menu = st.sidebar.radio("Navigate", [ "SLO & SLI Input", "Dashboard", "Trends", "Incidents", "Postmortems"])
 
-with tab2:
-    dashboard.render()
+if menu == "SLO & SLI Input": render_slo_input() elif menu == "Dashboard": render_dashboard() elif menu == "Trends": render_trend_charts() elif menu == "Incidents": render_incident_tracker() elif menu == "Postmortems": render_postmortem_tracker()
 
-with tab3:
-    trends.render()
-
-with tab4:
-    incidents.render()
-
-with tab5:
-    postmortems.render()
