@@ -1,32 +1,39 @@
 import streamlit as st
-from core.storage import load_json, save_json, SLO_FILE
-from core.suggestions import suggest_targets, evaluate_target
+import pandas as pd
+from core.storage import save_data, load_data
+from core.suggestions import suggest_sli_inputs
 
 def render_slo_input():
-    st.title("Add or Evaluate SLO")
+    st.subheader("📥 Input SLIs/SLOs")
 
-    service = st.selectbox("Service Type", ["API", "Database", "Auth", "Other"])
-    description = st.text_input("Short description of the service")
-    success = st.number_input("Successful Requests", min_value=0)
-    total = st.number_input("Total Requests", min_value=1)
+    with st.expander("💡 Suggestions"):
+        st.write(suggest_sli_inputs())
 
-    if st.button("Calculate & Suggest"):
-        percent = (success / total) * 100
-        suggested, reason = suggest_targets(service)
-        evaluation = evaluate_target(percent)
+    input_mode = st.radio("Input method", ["Manual", "Upload CSV"])
 
-        st.markdown(f"### ✅ Calculated SLI: `{percent:.2f}%`")
-        st.markdown(f"Suggested Target: `{suggested}%` – _{reason}_")
-        st.info(evaluation)
+    if input_mode == "Manual":
+        with st.form("manual_input"):
+            availability = st.number_input("Availability (%)", min_value=0.0, max_value=100.0, value=99.9)
+            latency = st.number_input("Latency (ms)", min_value=0.0, value=200.0)
+            error_rate = st.number_input("Error Rate (%)", min_value=0.0, max_value=100.0, value=0.5)
+            sli_target = st.number_input("SLI Target (%)", min_value=0.0, max_value=100.0, value=99.0)
+            submitted = st.form_submit_button("Save Entry")
 
-        # Save SLO entry
-        data = load_json(SLO_FILE)
-        data.append({
-            "service": service,
-            "desc": description,
-            "success": success,
-            "total": total,
-            "sli": percent
-        })
-        save_json(SLO_FILE, data)
-        st.success("Saved to SLO records.")
+            if submitted:
+                new_row = pd.DataFrame([{
+                    "availability": availability,
+                    "latency": latency,
+                    "error_rate": error_rate,
+                    "sli_target": sli_target
+                }])
+                existing = load_data()
+                save_data(pd.concat([existing, new_row], ignore_index=True))
+                st.success("SLO entry saved!")
+
+    elif input_mode == "Upload CSV":
+        uploaded = st.file_uploader("Upload CSV", type="csv")
+        if uploaded:
+            new_data = pd.read_csv(uploaded)
+            existing = load_data()
+            save_data(pd.concat([existing, new_data], ignore_index=True))
+            st.success("CSV data uploaded.")
