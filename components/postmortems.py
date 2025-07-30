@@ -1,22 +1,34 @@
 import streamlit as st
-from core.storage import load_metrics, save_metrics
+from core.storage import load_json, save_json, POSTMORTEM_FILE
+import datetime
 
-def render():
-    st.subheader("📜 Postmortems")
-    title = st.text_input("Postmortem Title")
-    notes = st.text_area("Summary and Learnings")
+def render_postmortem_tracker():
+    st.title("Postmortem Tracker")
 
-    if st.button("📝 Add Postmortem"):
-        data = load_metrics("postmortems.json")
-        data.append({"title": title, "notes": notes})
-        save_metrics("postmortems.json", data)
-        st.success("Postmortem added.")
+    pms = load_json(POSTMORTEM_FILE)
 
-    posts = load_metrics("postmortems.json")
-    if posts:
-        for p in posts:
-            st.markdown(f"### {p['title']}")
-            st.markdown(p['notes'])
-            st.markdown("---")
-    else:
-        st.info("No postmortems available.")
+    with st.expander("➕ Add Postmortem Action"):
+        title = st.text_input("Action Item")
+        due = st.date_input("Due Date", value=datetime.date.today())
+        status = st.selectbox("Status", ["Open", "Closed"])
+
+        if st.button("Save Action Item"):
+            pms.append({
+                "title": title,
+                "due": str(due),
+                "status": status
+            })
+            save_json(POSTMORTEM_FILE, pms)
+            st.success("Saved.")
+
+    overdue = [
+        pm for pm in pms
+        if pm["status"] != "Closed" and datetime.date.fromisoformat(pm["due"]) < datetime.date.today()
+    ]
+
+    st.metric("Open Items", sum(1 for pm in pms if pm["status"] == "Open"))
+    st.metric("Overdue", len(overdue))
+    st.metric("Closed in Time %", f"{100 * sum(1 for pm in pms if pm['status'] == 'Closed') / len(pms):.0f}%" if pms else "N/A")
+
+    for pm in pms[::-1]:
+        st.markdown(f"- **{pm['title']}** – `{pm['status']}` – _Due: {pm['due']}_")
