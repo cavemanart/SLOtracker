@@ -1,5 +1,15 @@
-# For future expansion: store snapshots, export reports, cloud sync, etc.
-def save_snapshot_to_markdown(metrics, filename="reports/snapshot.md"):
-    with open(filename, "w") as f:
-        for m in metrics:
-            f.write(f"- {m['Service']}: {m['SLI']} - {m['Current Value']} (Target: {m['SLO Target']}) - {m['Status']}\n")
+import json
+import os
+
+DATA_FILE = "data/sample_metrics.json"
+
+def load_metrics():
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r") as f:
+            return json.load(f)
+    return []
+
+def save_metrics(metrics):
+    os.makedirs("data", exist_ok=True)
+    with open(DATA_FILE, "w") as f:
+        json.dump(metrics, f, indent=2)
