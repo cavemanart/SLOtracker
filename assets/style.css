@@ -1,6 +1,8 @@
-body {
-    background-color: #f9f9f9;
-}
+/* Streamlit custom styles */
 h1 {
-    color: #3f3f3f;
+  color: #29465B;
+}
+.stButton>button {
+  background-color: #1565C0;
+  color: white;
 }
