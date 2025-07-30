@@ -1,16 +1,16 @@
 [
   {
-    "Service": "API Gateway",
-    "SLI": "% of successful HTTP 200 responses",
-    "SLO Target": "99.9%",
-    "Current Value": "99.95%",
-    "Status": "Met"
+    "service": "API Gateway",
+    "sli": "% of HTTP 200s",
+    "slo_target": "99.9%",
+    "current_value": "99.95%",
+    "status": "Met"
   },
   {
-    "Service": "User Login",
-    "SLI": "p95 latency < 300ms",
-    "SLO Target": "95%",
-    "Current Value": "92%",
-    "Status": "Not Met"
+    "service": "User Login",
+    "sli": "p95 latency < 300ms",
+    "slo_target": "95%",
+    "current_value": "92%",
+    "status": "Not Met"
   }
 ]
