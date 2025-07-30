@@ -1,26 +1,28 @@
 import streamlit as st
-from core.storage import load_metrics, save_metrics
-from core.compute import mttr_mttd
+from core.storage import load_json, save_json, INCIDENT_FILE
+import datetime
 
-def render():
-    st.subheader("🚨 Incident Tracker")
-    with st.form("incident_form"):
-        summary = st.text_input("Incident Summary")
-        detected = st.number_input("Time to Detect (min)", 0)
-        resolved = st.number_input("Time to Resolve (min)", 0)
-        submitted = st.form_submit_button("Add Incident")
+def render_incident_tracker():
+    st.title("Incident & MTTR Tracker")
 
-        if submitted:
-            data = load_metrics("incidents.json")
-            data.append({"summary": summary, "detected_in_minutes": detected, "resolved_in_minutes": resolved})
-            save_metrics("incidents.json", data)
-            st.success("Incident recorded!")
+    incidents = load_json(INCIDENT_FILE)
 
-    incidents = load_metrics("incidents.json")
+    with st.expander("➕ Add Incident"):
+        sev = st.selectbox("Severity", ["Low", "Medium", "High", "Critical"])
+        ack = st.time_input("Acknowledged At", value=datetime.datetime.now())
+        res = st.time_input("Resolved At", value=datetime.datetime.now())
+
+        if st.button("Log Incident"):
+            duration = (res - ack).total_seconds() / 60
+            incidents.append({
+                "severity": sev,
+                "ack": str(ack),
+                "res": str(res),
+                "duration_min": duration
+            })
+            save_json(INCIDENT_FILE, incidents)
+            st.success(f"Logged with MTTR: {duration:.1f} mins")
+
     if incidents:
-        mttr, mttd = mttr_mttd(incidents)
-        st.metric("🛠️ MTTR", f"{mttr} min")
-        st.metric("🔍 MTTD", f"{mttd} min")
-        st.table(incidents)
-    else:
-        st.info("No incidents logged yet.")
+        df = pd.DataFrame(incidents)
+        st.dataframe(df)
