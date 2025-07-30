@@ -1,26 +1,29 @@
-# streamlit_app.py
-
 import streamlit as st
-from components.slo_dashboard import render_slo_dashboard
 from components.incidents import render_incident_log
-from components.postmortems import render_postmortems
-from core.utils import show_header, get_active_tab
+from components.postmortem import render_postmortem_log
+from components.input_slo import render_slo_input
+from components.slo_dashboard import render_slo_dashboard
+from components.trends import render_trends
+from core.utils import load_styles
 
 st.set_page_config(page_title="SLO Tracker", layout="wide")
+load_styles()
 
-def main():
-    show_header()
+st.title("📊 SLO Tracker")
 
-    tab = get_active_tab()
+tabs = st.tabs(["SLO Dashboard", "Input SLOs", "Incident Log", "Postmortem Log", "Trends"])
 
-    if tab == "SLO Dashboard":
-        render_slo_dashboard()
-    elif tab == "Incident Log":
-        render_incident_log()
-    elif tab == "Postmortems":
-        render_postmortems()
-    else:
-        st.warning("Tab not found.")
+with tabs[0]:
+    render_slo_dashboard()
 
-if __name__ == "__main__":
-    main()
+with tabs[1]:
+    render_slo_input()
+
+with tabs[2]:
+    render_incident_log()
+
+with tabs[3]:
+    render_postmortem_log()
+
+with tabs[4]:
+    render_trends()
