@@ -1,26 +1,38 @@
 import streamlit as st
+import json
+import os
 import pandas as pd
-from core.storage import load_data
+
+SLO_DATA_PATH = "core/storage/slo_data.json"
+
+def load_slo_data():
+    if os.path.exists(SLO_DATA_PATH):
+        with open(SLO_DATA_PATH, "r") as f:
+            return json.load(f)
+    return []
 
 def render_slo_dashboard():
-    st.subheader("📈 SLO Dashboard")
+    st.title("📊 SLO Dashboard")
 
-    data = load_data()
-
-    if data.empty:
-        st.info("No SLO data available. Use the 'Input SLOs' tab to get started.")
+    slo_entries = load_slo_data()
+    if not slo_entries:
+        st.info("No SLO data available. Please input some SLOs first.")
         return
 
-    col1, col2 = st.columns(2)
+    df = pd.DataFrame(slo_entries)
+    st.dataframe(df, use_container_width=True)
 
-    with col1:
-        st.metric("Uptime %", f"{data['availability'].mean():.2f}%")
-        st.metric("Error Budget Remaining", f"{100 - data['error_rate'].mean():.2f}%")
-        st.metric("Avg Latency (ms)", f"{data['latency'].mean():.0f}")
+    st.subheader("📈 Aggregated SLO Insights")
+    if "Objective" in df.columns and "Success Rate" in df.columns:
+        df["Met Objective"] = df["Success Rate"] >= df["Objective"]
+        met_count = df["Met Objective"].sum()
+        total = len(df)
+        st.metric("SLOs Met", f"{met_count} / {total}")
 
-    with col2:
-        st.metric("SLI Target (%)", f"{data['sli_target'].mean():.2f}%")
-        st.metric("SLO Achieved", f"{(data['availability'] > data['sli_target']).mean() * 100:.2f}%")
-        st.metric("Total Records", len(data))
+        category_breakdown = df["Category"].value_counts()
+        st.bar_chart(category_breakdown)
 
-    st.dataframe(data)
+        if "Success Rate" in df.columns:
+            st.line_chart(df.set_index("Service")["Success Rate"])
+    else:
+        st.warning("Missing required fields for insights.")
