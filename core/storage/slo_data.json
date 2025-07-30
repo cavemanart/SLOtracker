@@ -1,0 +1,15 @@
+import os
+import json
+
+SLO_DATA_FILE = "core/storage/slo_data.json"
+
+def load_slo_data():
+    if not os.path.exists(SLO_DATA_FILE):
+        return []
+    with open(SLO_DATA_FILE, "r") as f:
+        return json.load(f)
+
+def save_slo_data(data):
+    os.makedirs(os.path.dirname(SLO_DATA_FILE), exist_ok=True)
+    with open(SLO_DATA_FILE, "w") as f:
+        json.dump(data, f, indent=2)
