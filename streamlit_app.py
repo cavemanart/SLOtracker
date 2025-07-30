@@ -1,22 +1,26 @@
-# slotracker/streamlit_app.py
+# streamlit_app.py
 
 import streamlit as st
-from components.incidents import render_incident_tracker
-from components.postmortems import render_postmortem_tracker
 from components.slo_dashboard import render_slo_dashboard
-from core.utils import load_styles
+from components.incidents import render_incident_log
+from components.postmortems import render_postmortems
+from core.utils import show_header, get_active_tab
 
-# Load custom CSS
-load_styles()
+st.set_page_config(page_title="SLO Tracker", layout="wide")
 
-# Sidebar navigation
-st.sidebar.title("SLO Tracker Navigation")
-page = st.sidebar.radio("Go to", ["SLO Dashboard", "Incidents", "Postmortems"])
+def main():
+    show_header()
 
-# Routing
-if page == "SLO Dashboard":
-    render_slo_dashboard()
-elif page == "Incidents":
-    render_incident_tracker()
-elif page == "Postmortems":
-    render_postmortem_tracker()
+    tab = get_active_tab()
+
+    if tab == "SLO Dashboard":
+        render_slo_dashboard()
+    elif tab == "Incident Log":
+        render_incident_log()
+    elif tab == "Postmortems":
+        render_postmortems()
+    else:
+        st.warning("Tab not found.")
+
+if __name__ == "__main__":
+    main()
