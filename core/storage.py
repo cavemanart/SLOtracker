@@ -1,15 +1,16 @@
 import json
-import os
+from pathlib import Path
 
-DATA_FILE = "data/sample_metrics.json"
+DATA_DIR = Path("data")
+DATA_DIR.mkdir(exist_ok=True)
 
-def load_metrics():
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r") as f:
+def save_metrics(file, data):
+    with open(DATA_DIR / file, "w") as f:
+        json.dump(data, f)
+
+def load_metrics(file):
+    try:
+        with open(DATA_DIR / file) as f:
             return json.load(f)
-    return []
-
-def save_metrics(metrics):
-    os.makedirs("data", exist_ok=True)
-    with open(DATA_FILE, "w") as f:
-        json.dump(metrics, f, indent=2)
+    except FileNotFoundError:
+        return []
