@@ -1,17 +1,12 @@
-import json
+import pandas as pd
 import os
 
-DATA_DIR = "data"
-SLO_FILE = os.path.join(DATA_DIR, "slo_data.json")
-INCIDENT_FILE = os.path.join(DATA_DIR, "incidents.json")
-POSTMORTEM_FILE = os.path.join(DATA_DIR, "postmortems.json")
+DATA_FILE = "data.csv"
 
-def load_json(file_path, default=[]):
-    if os.path.exists(file_path):
-        with open(file_path, "r") as f:
-            return json.load(f)
-    return default
+def load_data():
+    if os.path.exists(DATA_FILE):
+        return pd.read_csv(DATA_FILE)
+    return pd.DataFrame(columns=["availability", "latency", "error_rate", "sli_target"])
 
-def save_json(file_path, data):
-    with open(file_path, "w") as f:
-        json.dump(data, f, indent=2)
+def save_data(df):
+    df.to_csv(DATA_FILE, index=False)
