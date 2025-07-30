@@ -1,46 +1,32 @@
+import streamlit as st
+import pandas as pd
+import datetime
+
 def render_postmortem_tracker():
     st.subheader("📋 Postmortems")
 
-    postmortems = load_data("postmortems")
-    if postmortems is None or not isinstance(postmortems, list):
-        postmortems = []
+    uploaded_file = st.file_uploader("Upload Postmortems CSV", type="csv", key="postmortem_upload")
 
-    if postmortems:
-        open_pms = []
-        for pm in postmortems:
-            if (
-                isinstance(pm, dict) and
-                "status" in pm and "due" in pm and
-                pm["status"] != "Closed" and
-                datetime.date.fromisoformat(pm["due"]) < datetime.date.today()
-            ):
-                open_pms.append(pm)
+    if uploaded_file:
+        try:
+            df = pd.read_csv(uploaded_file)
+            st.write("🔍 Raw Postmortem Data", df)
 
-        if open_pms:
-            st.warning(f"⚠️ You have {len(open_pms)} overdue postmortems")
-        st.dataframe(pd.DataFrame(postmortems))
+            required_columns = {"status", "due"}
+            if not required_columns.issubset(df.columns):
+                st.warning(f"⚠️ CSV must include these columns: {', '.join(required_columns)}")
+                return
+
+            df["due"] = pd.to_datetime(df["due"], errors="coerce")
+            overdue = df[
+                (df["status"].str.lower() != "closed") &
+                (df["due"].dt.date < datetime.date.today())
+            ]
+
+            st.error(f"🚨 {len(overdue)} postmortems overdue")
+            st.write(overdue)
+
+        except Exception as e:
+            st.error(f"❌ Failed to process postmortem CSV: {e}")
     else:
-        st.info("No postmortems yet.")
-
-    with st.form("postmortem_form"):
-        st.write("Submit Postmortem")
-        incident = st.text_input("Related Incident")
-        summary = st.text_area("Summary")
-        root_cause = st.text_area("Root Cause")
-        action_items = st.text_area("Action Items")
-        due_date = st.date_input("Due Date")
-
-        submitted = st.form_submit_button("Submit Postmortem")
-        if submitted:
-            new_pm = {
-                "incident": incident,
-                "summary": summary,
-                "root_cause": root_cause,
-                "action_items": action_items,
-                "due": due_date.isoformat(),
-                "status": "Open",
-                "created_at": datetime.datetime.now().isoformat()
-            }
-            postmortems.append(new_pm)
-            save_data("postmortems", postmortems)
-            st.success("Postmortem submitted.")
+        st.info("📄 Upload a CSV to track postmortem follow-ups.")
