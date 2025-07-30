@@ -1,15 +1,8 @@
-def suggest_improvements(metrics):
-    suggestions = []
-    for m in metrics:
-        if m["status"] == "Not Met":
-            suggestions.append(
-                f"🔧 {m['service']}: Consider investigating why {m['sli']} is below the target of {m['slo_target']}. "
-                f"Current: {m['current_value']}"
-            )
-        elif m["status"] == "Unknown":
-            suggestions.append(
-                f"❓ {m['service']}: Unable to determine status. Check format of target/current values."
-            )
-    if not suggestions:
-        suggestions.append("✅ All tracked metrics are meeting their SLOs.")
-    return suggestions
+def suggest_slo_targets(metric_type):
+    suggestions = {
+        "availability": "99.9%",
+        "latency": "< 300ms",
+        "error_rate": "< 0.1%",
+        "throughput": ">= 1000 req/min"
+    }
+    return suggestions.get(metric_type.lower(), "Review your baseline")
