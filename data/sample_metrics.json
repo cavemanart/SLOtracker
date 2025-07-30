@@ -1,0 +1,16 @@
+[
+  {
+    "Service": "API Gateway",
+    "SLI": "% of successful HTTP 200 responses",
+    "SLO Target": "99.9%",
+    "Current Value": "99.95%",
+    "Status": "Met"
+  },
+  {
+    "Service": "User Login",
+    "SLI": "p95 latency < 300ms",
+    "SLO Target": "95%",
+    "Current Value": "92%",
+    "Status": "Not Met"
+  }
+]
