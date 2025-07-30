@@ -1,15 +1,14 @@
 import streamlit as st
-from core.storage import load_metrics
-from core.compute import calculate_sli
+from core.storage import load_json, SLO_FILE
 
-def render():
-    st.subheader("📈 Real-Time SLI Dashboard")
-    data = load_metrics("slo_data.json")
+def render_dashboard():
+    st.title("SLO Dashboard")
+    data = load_json(SLO_FILE)
     if not data:
-        st.info("No data to visualize.")
+        st.info("No SLO records found.")
         return
 
-    for entry in data:
-        st.metric(label=f"{entry['service']} - {entry['metric']}",
-                  value=entry['target'],
-                  delta="Live SLI placeholder")
+    for entry in data[::-1]:
+        st.markdown(f"**{entry['desc']}** ({entry['service']})")
+        st.markdown(f"SLI: `{entry['sli']:.2f}%` based on {entry['success']}/{entry['total']} requests")
+        st.markdown("---")
