@@ -1,44 +1,41 @@
 import streamlit as st
-import pandas as pd
-from core.metrics_loader import load_metrics, get_health_score
+from core.storage import save_metrics, load_metrics
 from core.suggestions import suggest_improvements
-from core.storage import save_metrics
-from core.config import DEFAULT_SLO
+from core.metrics import calculate_status
 
-st.set_page_config(page_title="SLA/SLO Dashboard", layout="wide")
+st.set_page_config(page_title="SLO Tracker", layout="wide")
+st.title("📊 SLO/SLA Tracker for SREs")
 
-st.title("📊 SLA/SLO Dashboard for SREs")
+if "metrics" not in st.session_state:
+    st.session_state["metrics"] = load_metrics()
 
-metrics = load_metrics()
+st.sidebar.header("Add New Metric")
+with st.sidebar.form("metric_form"):
+    service = st.text_input("Service/Component", placeholder="e.g., API Gateway")
+    sli = st.text_input("SLI (Metric)", placeholder="e.g., % of HTTP 200s")
+    slo_target = st.text_input("SLO Target", placeholder="e.g., 99.9%")
+    current_value = st.text_input("Current Value", placeholder="e.g., 99.95%")
+    submitted = st.form_submit_button("Add Metric")
 
-with st.expander("➕ Add New Service Metric"):
-    service = st.text_input("Service Name")
-    sli = st.text_input("SLI Description (e.g., p95 latency < 300ms)")
-    slo_target = st.text_input("SLO Target (e.g., 99.9%)")
-    current_value = st.text_input("Current Value (e.g., 99.5%)")
+if submitted:
+    new_entry = {
+        "service": service,
+        "sli": sli,
+        "slo_target": slo_target,
+        "current_value": current_value,
+        "status": calculate_status(slo_target, current_value)
+    }
+    st.session_state["metrics"].append(new_entry)
+    save_metrics(st.session_state["metrics"])
+    st.success(f"Added metric for {service}")
 
-    if st.button("Add Metric"):
-        metrics.append({
-            "Service": service,
-            "SLI": sli,
-            "SLO Target": slo_target,
-            "Current Value": current_value,
-            "Status": "Met" if current_value >= slo_target else "Not Met"
-        })
-        save_metrics(metrics)
-        st.success("Metric added!")
+st.subheader("🗂️ Metrics Overview")
 
-st.subheader("📋 Current SLA/SLO Tracking")
-
-if metrics:
-    df = pd.DataFrame(metrics)
-    st.dataframe(df, use_container_width=True)
-else:
+if not st.session_state["metrics"]:
     st.info("No metrics added yet.")
-
-health_score = get_health_score(metrics)
-st.metric("🔧 Overall SRE Health Score", f"{health_score}%")
-
-st.subheader("💡 Suggestions")
-for tip in suggest_improvements(metrics):
-    st.markdown(f"✅ {tip}")
+else:
+    st.dataframe(st.session_state["metrics"])
+    st.subheader("🧠 Suggestions")
+    suggestions = suggest_improvements(st.session_state["metrics"])
+    for s in suggestions:
+        st.markdown(f"- {s}")
