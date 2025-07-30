@@ -2,57 +2,66 @@ import streamlit as st
 import pandas as pd
 import datetime
 
-def render_incident_tracker():
-    st.subheader("🛠️ Incident Tracker")
+def render_postmortem_tracker():
+    st.subheader("📋 Postmortems")
 
     tab1, tab2 = st.tabs(["📄 Upload CSV", "✍️ Manual Entry"])
 
     with tab1:
-        uploaded_file = st.file_uploader("Upload Incident CSV", type="csv", key="incident_upload")
+        uploaded_file = st.file_uploader("Upload Postmortems CSV", type="csv", key="postmortem_upload")
 
         if uploaded_file:
             try:
                 df = pd.read_csv(uploaded_file)
-                st.write("🔍 Raw Incident Data", df)
+                st.write("🔍 Raw Postmortem Data", df)
 
-                if "timestamp" in df.columns:
-                    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-                    df["date"] = df["timestamp"].dt.date
+                required_columns = {"status", "due"}
+                if not required_columns.issubset(df.columns):
+                    st.warning(f"⚠️ CSV must include these columns: {', '.join(required_columns)}")
+                    return
 
-                    daily_counts = df.groupby("date").size()
-                    st.line_chart(daily_counts)
-                else:
-                    st.warning("⚠️ CSV is missing 'timestamp' column.")
+                df["due"] = pd.to_datetime(df["due"], errors="coerce")
+                overdue = df[
+                    (df["status"].str.lower() != "closed") &
+                    (df["due"].dt.date < datetime.date.today())
+                ]
+
+                st.error(f"🚨 {len(overdue)} postmortems overdue")
+                st.write(overdue)
+
             except Exception as e:
-                st.error(f"❌ Failed to process CSV: {e}")
+                st.error(f"❌ Failed to process postmortem CSV: {e}")
         else:
-            st.info("📄 Upload a CSV file to view incident trends.")
+            st.info("📄 Upload a CSV to track postmortem follow-ups.")
 
     with tab2:
-        st.markdown("**Suggested Fields:** `timestamp`, `service`, `impact`, `description`")
+        st.markdown("**Suggested Fields:** `title`, `owner`, `status`, `due`")
 
-        incident_data = []
-        with st.form("manual_incident_form"):
-            num_rows = st.number_input("How many incidents do you want to input?", 1, 10, 1)
+        postmortem_data = []
+        with st.form("manual_pm_form"):
+            num_rows = st.number_input("How many postmortems to enter?", 1, 10, 1)
             for i in range(num_rows):
-                st.markdown(f"**Incident {i+1}**")
-                timestamp = st.date_input(f"Timestamp", key=f"ts_{i}")
-                service = st.text_input("Service affected", key=f"svc_{i}")
-                impact = st.selectbox("Impact level", ["Low", "Medium", "High", "Critical"], key=f"imp_{i}")
-                description = st.text_area("Description", key=f"desc_{i}")
-                incident_data.append({
-                    "timestamp": pd.to_datetime(timestamp),
-                    "service": service,
-                    "impact": impact,
-                    "description": description
+                st.markdown(f"**Postmortem {i+1}**")
+                title = st.text_input("Title", key=f"title_{i}")
+                owner = st.text_input("Owner", key=f"owner_{i}")
+                status = st.selectbox("Status", ["Open", "In Progress", "Closed"], key=f"status_{i}")
+                due = st.date_input("Due Date", key=f"due_{i}")
+                postmortem_data.append({
+                    "title": title,
+                    "owner": owner,
+                    "status": status,
+                    "due": pd.to_datetime(due)
                 })
             submitted = st.form_submit_button("Submit")
 
         if submitted:
-            df = pd.DataFrame(incident_data)
-            st.success("✅ Incidents recorded")
+            df = pd.DataFrame(postmortem_data)
+            st.success("✅ Postmortems recorded")
             st.write(df)
 
-            df["date"] = df["timestamp"].dt.date
-            daily_counts = df.groupby("date").size()
-            st.line_chart(daily_counts)
+            overdue = df[
+                (df["status"].str.lower() != "closed") &
+                (df["due"].dt.date < datetime.date.today())
+            ]
+            st.error(f"🚨 {len(overdue)} postmortems overdue")
+            st.write(overdue)
