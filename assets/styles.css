@@ -1,8 +1,14 @@
-/* Streamlit custom styles */
-h1 {
-  color: #29465B;
+/* Light padding and soft visual feel */
+body {
+    font-family: 'Segoe UI', sans-serif;
+    background-color: #f5f7fa;
 }
 .stButton>button {
-  background-color: #1565C0;
-  color: white;
+    background-color: #4CAF50;
+    color: white;
+    border-radius: 8px;
+    padding: 10px 20px;
+}
+.stMetric {
+    font-weight: bold;
 }
