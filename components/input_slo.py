@@ -1,39 +1,43 @@
-import streamlit as st
-import pandas as pd
-from core.storage import save_data, load_data
-from core.suggestions import suggest_sli_inputs
+import streamlit as st import json import os
 
-def render_slo_input():
-    st.subheader("📥 Input SLIs/SLOs")
+SLO_FILE_PATH = "core/storage/slo_data.json"
 
-    with st.expander("💡 Suggestions"):
-        st.write(suggest_sli_inputs())
+SERVICES = [ "Authentication", "Payments", "Search", "User Profile", "Notifications" ]
 
-    input_mode = st.radio("Input method", ["Manual", "Upload CSV"])
+SLI_OPTIONS = [ "Availability", "Latency", "Error Rate", "Throughput" ]
 
-    if input_mode == "Manual":
-        with st.form("manual_input"):
-            availability = st.number_input("Availability (%)", min_value=0.0, max_value=100.0, value=99.9)
-            latency = st.number_input("Latency (ms)", min_value=0.0, value=200.0)
-            error_rate = st.number_input("Error Rate (%)", min_value=0.0, max_value=100.0, value=0.5)
-            sli_target = st.number_input("SLI Target (%)", min_value=0.0, max_value=100.0, value=99.0)
-            submitted = st.form_submit_button("Save Entry")
+def load_slos(): if os.path.exists(SLO_FILE_PATH): with open(SLO_FILE_PATH, "r") as f: return json.load(f) return []
 
-            if submitted:
-                new_row = pd.DataFrame([{
-                    "availability": availability,
-                    "latency": latency,
-                    "error_rate": error_rate,
-                    "sli_target": sli_target
-                }])
-                existing = load_data()
-                save_data(pd.concat([existing, new_row], ignore_index=True))
-                st.success("SLO entry saved!")
+def save_slos(slos): with open(SLO_FILE_PATH, "w") as f: json.dump(slos, f, indent=2)
 
-    elif input_mode == "Upload CSV":
-        uploaded = st.file_uploader("Upload CSV", type="csv")
-        if uploaded:
-            new_data = pd.read_csv(uploaded)
-            existing = load_data()
-            save_data(pd.concat([existing, new_data], ignore_index=True))
-            st.success("CSV data uploaded.")
+def render_input_slo(): st.header("📈 Input SLO Definitions")
+
+slos = load_slos()
+
+with st.form("slo_form"):
+    service = st.selectbox("Service", SERVICES)
+    sli = st.selectbox("SLI Type", SLI_OPTIONS)
+    objective = st.number_input("Objective % (e.g. 99.9)", min_value=90.0, max_value=100.0, value=99.0, step=0.1)
+    period = st.selectbox("Evaluation Period", ["7 days", "30 days", "90 days"])
+    notes = st.text_area("Notes", "")
+    submit = st.form_submit_button("Save SLO")
+
+    if submit:
+        slos.append({
+            "service": service,
+            "sli": sli,
+            "objective": objective,
+            "period": period,
+            "notes": notes
+        })
+        save_slos(slos)
+        st.success("✅ SLO saved.")
+
+if slos:
+    st.subheader("📋 Existing SLOs")
+    for slo in slos:
+        st.markdown(f"**Service:** {slo['service']} | **SLI:** {slo['sli']} | **Target:** {slo['objective']}% | **Period:** {slo['period']}")
+        if slo['notes']:
+            st.markdown(f"_Notes:_ {slo['notes']}")
+        st.markdown("---")
+
