@@ -1,28 +1,32 @@
-import streamlit as st
-from core.storage import load_json, save_json, INCIDENT_FILE
-import datetime
-
 def render_incident_tracker():
-    st.title("Incident & MTTR Tracker")
+    st.subheader("🛠️ Incident Tracker")
 
-    incidents = load_json(INCIDENT_FILE)
-
-    with st.expander("➕ Add Incident"):
-        sev = st.selectbox("Severity", ["Low", "Medium", "High", "Critical"])
-        ack = st.time_input("Acknowledged At", value=datetime.datetime.now())
-        res = st.time_input("Resolved At", value=datetime.datetime.now())
-
-        if st.button("Log Incident"):
-            duration = (res - ack).total_seconds() / 60
-            incidents.append({
-                "severity": sev,
-                "ack": str(ack),
-                "res": str(res),
-                "duration_min": duration
-            })
-            save_json(INCIDENT_FILE, incidents)
-            st.success(f"Logged with MTTR: {duration:.1f} mins")
+    incidents = load_data("incidents")  # FIX: Make sure this loads a list
+    if incidents is None or not isinstance(incidents, list):
+        incidents = []
 
     if incidents:
         df = pd.DataFrame(incidents)
         st.dataframe(df)
+    else:
+        st.info("No incidents recorded yet.")
+
+    with st.form("incident_form"):
+        st.write("Log a new incident")
+        title = st.text_input("Title")
+        severity = st.selectbox("Severity", ["Low", "Medium", "High", "Critical"])
+        reported_by = st.text_input("Reported By")
+        description = st.text_area("Description")
+
+        submitted = st.form_submit_button("Log Incident")
+        if submitted:
+            new_incident = {
+                "title": title,
+                "severity": severity,
+                "reported_by": reported_by,
+                "description": description,
+                "timestamp": datetime.datetime.now().isoformat()
+            }
+            incidents.append(new_incident)
+            save_data("incidents", incidents)
+            st.success("Incident logged!")
