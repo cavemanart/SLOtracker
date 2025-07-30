@@ -6,48 +6,44 @@ from datetime import datetime
 SLO_DATA_FILE = "core/storage/slo_data.json"
 
 def load_slo_data():
-    if not os.path.exists(SLO_DATA_FILE):
+    if not os.path.exists(SLO_DATA_FILE) or os.path.getsize(SLO_DATA_FILE) == 0:
         return []
     with open(SLO_DATA_FILE, "r") as f:
-        return json.load(f)
+        try:
+            return json.load(f)
+        except json.JSONDecodeError:
+            return []
 
 def save_slo_data(data):
+    os.makedirs(os.path.dirname(SLO_DATA_FILE), exist_ok=True)
     with open(SLO_DATA_FILE, "w") as f:
         json.dump(data, f, indent=2)
 
 def render_slo_input():
-    st.title("📈 Input Service Level Objectives (SLOs)")
+    st.header("🎯 Input New SLO")
 
-    with st.form("slo_input_form", clear_on_submit=True):
-        service_name = st.text_input("Service Name")
-        slo_description = st.text_area("SLO Description")
-        objective_percent = st.slider("Objective % (e.g. 99.9)", 90.0, 100.0, 99.9)
-        measurement_window = st.selectbox("Measurement Window", ["7 days", "30 days", "90 days"])
-        sli_metric = st.text_input("SLI Metric (e.g. request latency < 300ms)")
+    service = st.text_input("Service Name")
+    objective = st.text_input("Objective Description")
+    target = st.slider("Target %", 80, 100, 99)
+    timeframe = st.selectbox("Timeframe", ["7d", "30d", "90d", "180d", "365d"])
+    notes = st.text_area("Notes (Optional)")
 
-        submit = st.form_submit_button("Submit SLO")
+    if st.button("➕ Add SLO"):
+        if service and objective:
+            new_slo = {
+                "service": service,
+                "objective": objective,
+                "target": target,
+                "timeframe": timeframe,
+                "notes": notes,
+                "created_at": datetime.utcnow().isoformat()
+            }
 
-    if submit:
-        if not service_name or not slo_description or not sli_metric:
-            st.warning("Please fill in all fields.")
-        else:
             slo_data = load_slo_data()
-            slo_data.append({
-                "service_name": service_name,
-                "description": slo_description,
-                "objective": objective_percent,
-                "window": measurement_window,
-                "sli_metric": sli_metric,
-                "timestamp": datetime.utcnow().isoformat()
-            })
+            slo_data.append(new_slo)
             save_slo_data(slo_data)
-            st.success(f"SLO for '{service_name}' saved.")
 
-    st.markdown("---")
-    if st.checkbox("Show Current SLOs"):
-        data = load_slo_data()
-        if data:
-            for slo in data[::-1]:
-                st.markdown(f"**{slo['service_name']}** — {slo['objective']}% over {slo['window']}<br><small>{slo['description']}</small>", unsafe_allow_html=True)
+            st.success("SLO added successfully!")
+            st.experimental_rerun()
         else:
-            st.info("No SLOs saved yet.")
+            st.warning("Please fill out all required fields.")
