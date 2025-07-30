@@ -1,34 +1,46 @@
-import streamlit as st
-from core.storage import load_json, save_json, POSTMORTEM_FILE
-import datetime
-
 def render_postmortem_tracker():
-    st.title("Postmortem Tracker")
+    st.subheader("📋 Postmortems")
 
-    pms = load_json(POSTMORTEM_FILE)
+    postmortems = load_data("postmortems")
+    if postmortems is None or not isinstance(postmortems, list):
+        postmortems = []
 
-    with st.expander("➕ Add Postmortem Action"):
-        title = st.text_input("Action Item")
-        due = st.date_input("Due Date", value=datetime.date.today())
-        status = st.selectbox("Status", ["Open", "Closed"])
+    if postmortems:
+        open_pms = []
+        for pm in postmortems:
+            if (
+                isinstance(pm, dict) and
+                "status" in pm and "due" in pm and
+                pm["status"] != "Closed" and
+                datetime.date.fromisoformat(pm["due"]) < datetime.date.today()
+            ):
+                open_pms.append(pm)
 
-        if st.button("Save Action Item"):
-            pms.append({
-                "title": title,
-                "due": str(due),
-                "status": status
-            })
-            save_json(POSTMORTEM_FILE, pms)
-            st.success("Saved.")
+        if open_pms:
+            st.warning(f"⚠️ You have {len(open_pms)} overdue postmortems")
+        st.dataframe(pd.DataFrame(postmortems))
+    else:
+        st.info("No postmortems yet.")
 
-    overdue = [
-        pm for pm in pms
-        if pm["status"] != "Closed" and datetime.date.fromisoformat(pm["due"]) < datetime.date.today()
-    ]
+    with st.form("postmortem_form"):
+        st.write("Submit Postmortem")
+        incident = st.text_input("Related Incident")
+        summary = st.text_area("Summary")
+        root_cause = st.text_area("Root Cause")
+        action_items = st.text_area("Action Items")
+        due_date = st.date_input("Due Date")
 
-    st.metric("Open Items", sum(1 for pm in pms if pm["status"] == "Open"))
-    st.metric("Overdue", len(overdue))
-    st.metric("Closed in Time %", f"{100 * sum(1 for pm in pms if pm['status'] == 'Closed') / len(pms):.0f}%" if pms else "N/A")
-
-    for pm in pms[::-1]:
-        st.markdown(f"- **{pm['title']}** – `{pm['status']}` – _Due: {pm['due']}_")
+        submitted = st.form_submit_button("Submit Postmortem")
+        if submitted:
+            new_pm = {
+                "incident": incident,
+                "summary": summary,
+                "root_cause": root_cause,
+                "action_items": action_items,
+                "due": due_date.isoformat(),
+                "status": "Open",
+                "created_at": datetime.datetime.now().isoformat()
+            }
+            postmortems.append(new_pm)
+            save_data("postmortems", postmortems)
+            st.success("Postmortem submitted.")
