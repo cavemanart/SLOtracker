@@ -1,5 +1,24 @@
 import streamlit as st
 import pandas as pd
+import re
+from collections import Counter
+
+def extract_keywords(text_series, top_n=10):
+    all_words = []
+    for desc in text_series.dropna():
+        words = re.findall(r"\b\w{4,}\b", str(desc).lower())  # 4+ character words
+        all_words.extend(words)
+    common_words = Counter(all_words).most_common(top_n)
+    return pd.DataFrame(common_words, columns=["Keyword", "Count"])
+
+def convert_to_minutes(time_series):
+    if pd.api.types.is_numeric_dtype(time_series):
+        return time_series
+    try:
+        # Handle HH:MM:SS or D-HH:MM:SS formats
+        return pd.to_timedelta(time_series, errors="coerce").dt.total_seconds() / 60
+    except:
+        return pd.Series([None] * len(time_series))
 
 def render_incident_log():
     st.subheader("Incident Log Analysis")
@@ -24,28 +43,41 @@ def render_incident_log():
                 st.error(f"CSV is missing required columns: {', '.join(missing)}")
                 return
 
-            # Clean and derive needed fields
-            df["Time worked"] = pd.to_numeric(df["Time worked"], errors="coerce")
-            df["duration_minutes"] = df["Time worked"]  # Assuming it's in minutes already
+            # Convert time fields
+            df["duration_minutes"] = pd.to_numeric(df["Time worked"], errors="coerce")
+            df["business_duration_min"] = convert_to_minutes(df["Business duration"])
+            df["business_resolve_min"] = convert_to_minutes(df["Business resolve time"])
 
-            avg_duration = df["duration_minutes"].mean()
+            # Basic metrics
             total_incidents = len(df)
+            avg_duration = df["duration_minutes"].mean()
+            avg_resolve = df["business_resolve_min"].mean()
+            worst_resolve = df["business_resolve_min"].max()
             high_impact = df[df["Impact"].str.contains("High", case=False, na=False)]
-            changes_linked = df[df["Caused by Change"].notna() & (df["Caused by Change"] != "")]
+            changes_linked = df[df["Caused by Change"].notna() & (df["Caused by Change"].str.strip() != "")]
 
             st.metric("Total Incidents", total_incidents)
-            st.metric("Average Duration (min)", round(avg_duration, 2) if not pd.isna(avg_duration) else "N/A")
+            st.metric("Average Time Worked (min)", round(avg_duration, 2) if not pd.isna(avg_duration) else "N/A")
+            st.metric("MTTR (Mean Time to Resolve)", round(avg_resolve, 2) if not pd.isna(avg_resolve) else "N/A")
+            st.metric("Longest Resolution (min)", round(worst_resolve, 2) if not pd.isna(worst_resolve) else "N/A")
             st.metric("High Impact Incidents", len(high_impact))
-            st.metric("Linked to Change", len(changes_linked))
 
-            st.markdown("---")
-            st.subheader("Change Management Planning")
-            if len(changes_linked) > 0:
+            # Keyword frequency
+            st.markdown("### 🔍 Top Keywords in Incident Descriptions")
+            keyword_df = extract_keywords(df["Short description"], top_n=10)
+            st.dataframe(keyword_df)
+
+            # Optional: Show top issue codes
+            if "Issue Code" in df.columns:
+                st.markdown("### 🧩 Top Issue Codes")
+                top_issues = df["Issue Code"].value_counts().head(5)
+                st.bar_chart(top_issues)
+
+            # Optional: Changes linked
+            if not changes_linked.empty:
+                st.markdown("### 🔗 Incidents Linked to Change")
                 top_change_causes = changes_linked["Caused by Change"].value_counts().head(3)
-                st.write("Top changes associated with incidents:")
-                st.write(top_change_causes)
-            else:
-                st.info("No change-related incidents found.")
+                st.dataframe(top_change_causes.rename("Count"))
 
             st.markdown("---")
             if st.checkbox("Show full incident table"):
