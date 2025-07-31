@@ -1,69 +1,58 @@
 import streamlit as st
 import pandas as pd
 
-REQUIRED_COLUMNS = ["date", "system", "impact", "duration_minutes", "description"]
+REQUIRED_COLUMNS = {
+    "Number": "incident_id",
+    "Short description": "short_description",
+    "Service": "system",
+    "Impact Issue Code": "impact",
+    "Duration": "duration_minutes",
+    "Description": "description",
+    "Created": "date"
+}
+
+def map_incident_columns(df):
+    missing = [col for col in REQUIRED_COLUMNS if col not in df.columns]
+    if missing:
+        st.error(f"CSV is missing required columns: {', '.join(missing)}")
+        return None
+
+    mapped_df = df.rename(columns=REQUIRED_COLUMNS)
+    
+    # Ensure 'duration_minutes' is numeric
+    mapped_df["duration_minutes"] = pd.to_numeric(mapped_df["duration_minutes"], errors="coerce")
+
+    # Ensure date column is datetime
+    mapped_df["date"] = pd.to_datetime(mapped_df["date"], errors="coerce")
+
+    return mapped_df
 
 def render_incident_log():
-    st.header("Incident Log & Change Planner")
-    uploaded_file = st.file_uploader("Upload your incident CSV", type=["csv"])
+    st.title("📉 Incident Log & Change Management Planner")
+    uploaded_file = st.file_uploader("Upload Incident CSV", type=["csv"])
 
-    if uploaded_file is not None:
-        try:
-            df = pd.read_csv(uploaded_file)
+    if uploaded_file:
+        df_raw = pd.read_csv(uploaded_file)
+        df = map_incident_columns(df_raw)
 
-            # Check if all required columns exist
-            missing_cols = [col for col in REQUIRED_COLUMNS if col not in df.columns]
-            if missing_cols:
-                st.error(f"CSV is missing required columns: {', '.join(missing_cols)}")
-                show_sample_csv()
-                return
+        if df is None:
+            return
 
-            st.success("CSV uploaded successfully.")
-            st.subheader("Raw Incident Log")
-            st.dataframe(df)
-
-            # Convert date column to datetime if needed
-            df["date"] = pd.to_datetime(df["date"], errors="coerce")
-
-            # Incident Summary
-            st.subheader("📊 Incident Summary")
+        # Key stats
+        st.subheader("📊 Key Incident Statistics")
+        col1, col2, col3 = st.columns(3)
+        with col1:
             st.metric("Total Incidents", len(df))
-            st.metric("Avg Duration (min)", round(df["duration_minutes"].mean(), 2))
-            st.metric("Total Duration (hrs)", round(df["duration_minutes"].sum() / 60, 2))
-            st.metric("Impacted Systems", df["system"].nunique())
+        with col2:
+            st.metric("Average Duration (min)", round(df["duration_minutes"].mean(), 2))
+        with col3:
+            st.metric("Most Impacted System", df["system"].mode().iloc[0])
 
-            st.subheader("Top Impacted Systems")
-            top_systems = df["system"].value_counts().head(5)
-            st.bar_chart(top_systems)
+        # Change Planner
+        st.subheader("🛠️ Change Management Planner")
+        systems = df["system"].value_counts().reset_index()
+        systems.columns = ["System", "Incident Count"]
+        st.dataframe(systems)
 
-            # Change Management Planner (Simple Rule-of-Thumb)
-            st.subheader("🛠️ Change Management Suggestions")
-            for system, count in top_systems.items():
-                if count >= 3:
-                    st.warning(f"⚠️ System '{system}' had {count} incidents. Consider a change review or reliability improvement sprint.")
-
-        except Exception as e:
-            st.error(f"An error occurred while processing the CSV: {e}")
-            show_sample_csv()
-    else:
-        st.info("Please upload a CSV to begin analysis.")
-        show_sample_csv()
-
-def show_sample_csv():
-    st.subheader("📋 Sample CSV Format")
-    st.markdown("""
-    Please upload a CSV file with the following **columns**:
-    - `date`: (e.g., 2025-07-15)
-    - `system`: System or service affected
-    - `impact`: Brief description of user/business impact
-    - `duration_minutes`: How long the incident lasted (numeric)
-    - `description`: More detailed notes or findings
-    """)
-    sample_data = {
-        "date": ["2025-07-15", "2025-07-20"],
-        "system": ["Login API", "Database"],
-        "impact": ["Login failure", "Read timeout"],
-        "duration_minutes": [25, 60],
-        "description": ["Token service misconfigured", "Connection pool exhausted"]
-    }
-    st.dataframe(pd.DataFrame(sample_data))
+        st.subheader("📋 Full Incident Table")
+        st.dataframe(df)
