@@ -1,87 +1,87 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import re
-from collections import Counter
+from datetime import datetime
 
-def extract_keywords(text_series, top_n=10):
-    all_words = []
-    for desc in text_series.dropna():
-        words = re.findall(r"\b\w{4,}\b", str(desc).lower())  # 4+ character words
-        all_words.extend(words)
-    common_words = Counter(all_words).most_common(top_n)
-    return pd.DataFrame(common_words, columns=["Keyword", "Count"])
+REQUIRED_COLUMNS = [
+    "Number", "Short description", "Caller", "Priority", "State", "Service",
+    "Assignment group", "Assigned to", "Created", "Actions taken",
+    "Business duration", "Business resolve time", "Description", "Duration",
+    "Escalation", "Impact", "Issue Code", "Made SLA", "SLA due", "Severity", "Time worked"
+]
 
-def convert_to_minutes(time_series):
-    if pd.api.types.is_numeric_dtype(time_series):
-        return time_series
-    try:
-        # Handle HH:MM:SS or D-HH:MM:SS formats
-        return pd.to_timedelta(time_series, errors="coerce").dt.total_seconds() / 60
-    except:
-        return pd.Series([None] * len(time_series))
+def parse_business_duration(duration_str):
+    match = re.match(r"(?:(\d+)d)?\s*(?:(\d+)h)?\s*(?:(\d+)m)?", str(duration_str))
+    if not match:
+        return 0
+    days, hours, minutes = match.groups()
+    total_minutes = int(days or 0) * 1440 + int(hours or 0) * 60 + int(minutes or 0)
+    return total_minutes
 
 def render_incident_log():
-    st.subheader("Incident Log Analysis")
-    st.write("Upload your incident CSV to view key metrics and planning suggestions.")
-
-    uploaded_file = st.file_uploader("Upload Incident CSV", type=["csv"])
+    st.header("📉 Incident Log & Change Management Planner")
+    uploaded_file = st.file_uploader("Upload Incident CSV", type="csv")
 
     if uploaded_file:
-        try:
-            df = pd.read_csv(uploaded_file)
+        df = pd.read_csv(uploaded_file)
+        missing_cols = [col for col in REQUIRED_COLUMNS if col not in df.columns]
+        if missing_cols:
+            st.error(f"CSV is missing required columns: {', '.join(missing_cols)}")
+            return
 
-            required_columns = [
-                "Number", "Short description", "Caller", "Priority", "State", "Service",
-                "Assignment group", "Assigned to", "Created", "Actions taken",
-                "Business duration", "Business resolve time", "Caused by Change",
-                "Description", "Time worked", "Impact", "Issue Code", "Made SLA",
-                "SLA due", "Severity"
-            ]
+        df['Created'] = pd.to_datetime(df['Created'], errors='coerce')
+        df['Business duration (mins)'] = df['Business duration'].apply(parse_business_duration)
 
-            missing = [col for col in required_columns if col not in df.columns]
-            if missing:
-                st.error(f"CSV is missing required columns: {', '.join(missing)}")
-                return
+        # Business resolve time is already in seconds - convert to mins
+        df['Business resolve time (mins)'] = df['Business resolve time'].apply(pd.to_numeric, errors='coerce') / 60
 
-            # Convert time fields
-            df["duration_minutes"] = pd.to_numeric(df["Time worked"], errors="coerce")
-            df["business_duration_min"] = convert_to_minutes(df["Business duration"])
-            df["business_resolve_min"] = convert_to_minutes(df["Business resolve time"])
+        df['Duration (mins)'] = df['Duration'].apply(pd.to_numeric, errors='coerce')
 
-            # Basic metrics
-            total_incidents = len(df)
-            avg_duration = df["duration_minutes"].mean()
-            avg_resolve = df["business_resolve_min"].mean()
-            worst_resolve = df["business_resolve_min"].max()
-            high_impact = df[df["Impact"].str.contains("High", case=False, na=False)]
-            changes_linked = df[df["Caused by Change"].notna() & (df["Caused by Change"].str.strip() != "")]
+        mttr = df['Duration (mins)'].mean()
+        avg_business_duration = df['Business duration (mins)'].mean()
+        avg_resolve = df['Business resolve time (mins)'].mean()
 
-            st.metric("Total Incidents", total_incidents)
-            st.metric("Average Time Worked (min)", round(avg_duration, 2) if not pd.isna(avg_duration) else "N/A")
-            st.metric("MTTR (Mean Time to Resolve)", round(avg_resolve, 2) if not pd.isna(avg_resolve) else "N/A")
-            st.metric("Longest Resolution (min)", round(worst_resolve, 2) if not pd.isna(worst_resolve) else "N/A")
-            st.metric("High Impact Incidents", len(high_impact))
+        st.subheader("📊 Key Metrics")
+        st.metric("Mean Time To Resolve (MTTR)", f"{mttr:.2f} minutes")
+        st.metric("Avg. Business Duration", f"{avg_business_duration:.2f} minutes")
+        st.metric("Avg. Business Resolve Time", f"{avg_resolve:.2f} minutes")
 
-            # Keyword frequency
-            st.markdown("### 🔍 Top Keywords in Incident Descriptions")
-            keyword_df = extract_keywords(df["Short description"], top_n=10)
-            st.dataframe(keyword_df)
+        st.subheader("📌 Avg Resolution by Incident Type")
+        if 'Issue Code' in df.columns:
+            grouped = df.groupby('Issue Code').agg({
+                'Duration (mins)': 'mean',
+                'Business duration (mins)': 'mean',
+                'Business resolve time (mins)': 'mean',
+                'Number': 'count'
+            }).rename(columns={
+                'Duration (mins)': 'MTTR (mins)',
+                'Business duration (mins)': 'Biz Duration (mins)',
+                'Business resolve time (mins)': 'Biz Resolve (mins)',
+                'Number': 'Incident Count'
+            }).sort_values(by='Incident Count', ascending=False)
 
-            # Optional: Show top issue codes
-            if "Issue Code" in df.columns:
-                st.markdown("### 🧩 Top Issue Codes")
-                top_issues = df["Issue Code"].value_counts().head(5)
-                st.bar_chart(top_issues)
+            st.dataframe(grouped.style.format({
+                'MTTR (mins)': '{:.1f}',
+                'Biz Duration (mins)': '{:.1f}',
+                'Biz Resolve (mins)': '{:.1f}'
+            }))
 
-            # Optional: Changes linked
-            if not changes_linked.empty:
-                st.markdown("### 🔗 Incidents Linked to Change")
-                top_change_causes = changes_linked["Caused by Change"].value_counts().head(3)
-                st.dataframe(top_change_causes.rename("Count"))
+        st.subheader("🔍 Incident Insights")
 
-            st.markdown("---")
-            if st.checkbox("Show full incident table"):
-                st.dataframe(df)
+        df_filtered = df.dropna(subset=['Short description'])
+        keyword_counts = df_filtered['Short description'].str.lower().str.extractall(r'(?P<keyword>\b\w{4,}\b)')['keyword'].value_counts().head(10)
 
-        except Exception as e:
-            st.error(f"Error processing file: {e}")
+        st.write("Top Keywords in Short Descriptions:")
+        st.bar_chart(keyword_counts)
+
+        st.write("Incidents Breakdown by State:")
+        st.bar_chart(df['State'].value_counts())
+
+        st.write("Incidents by Priority:")
+        st.bar_chart(df['Priority'].value_counts())
+
+        st.subheader("📁 Full Incident Table")
+        st.dataframe(df)
+
+        st.download_button("Download Enhanced Incident Data", data=df.to_csv(index=False), file_name="enhanced_incidents.csv")
