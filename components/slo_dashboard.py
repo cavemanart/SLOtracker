@@ -1,29 +1,32 @@
 import streamlit as st
 import json
-import os
 import pandas as pd
+from pathlib import Path
 
-SLO_DATA_FILE = "core/storage/slo_data.json"
+def render_dashboard():
+    st.title("📈 SLO Dashboard")
+    slo_file = Path("data/slo_data.json")
 
-def load_slo_data():
-    if not os.path.exists(SLO_DATA_FILE) or os.path.getsize(SLO_DATA_FILE) == 0:
-        return []
-    with open(SLO_DATA_FILE, "r") as f:
-        try:
-            return json.load(f)
-        except json.JSONDecodeError:
-            return []
-
-def render_slo_dashboard():
-    st.header("📊 SLO Dashboard")
-
-    slo_data = load_slo_data()
-    if not slo_data:
-        st.info("No SLOs found. Add some in the 'Input SLOs' tab.")
+    if not slo_file.exists():
+        st.warning("No SLO data found.")
         return
 
-    df = pd.DataFrame(slo_data)
-    df["created_at"] = pd.to_datetime(df["created_at"])
-    df = df.sort_values("created_at", ascending=False)
+    with open(slo_file) as f:
+        slo_data = json.load(f)
 
-    st.dataframe(df, use_container_width=True)
+    if not slo_data:
+        st.warning("No SLOs defined.")
+        return
+
+    st.subheader("📋 Current SLOs and SLIs")
+
+    for entry in slo_data:
+        with st.container():
+            st.markdown(f"### {entry['service']}")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Target (%)", entry["target"])
+            with col2:
+                st.metric("SLI (%)", entry.get("sli", "N/A"))
+            with col3:
+                st.write(f"Description: {entry['description']}")
