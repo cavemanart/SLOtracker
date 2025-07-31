@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import io
 
-
 def render_incident_log():
     st.header("Incident Log Analyzer")
     
@@ -39,7 +38,6 @@ def render_incident_log():
             st.error(f"Error processing file: {e}")
     else:
         st.info("Upload a CSV file to begin analysis.")
-
 
 # Example expected CSV format:
 # incident_id,timestamp,severity,resolution_time_minutes,root_cause
