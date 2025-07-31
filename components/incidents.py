@@ -1,49 +1,46 @@
 import streamlit as st
 import pandas as pd
+import io
+
 
 def render_incident_log():
-    st.subheader("📂 Upload Incident Log CSV")
-    uploaded_file = st.file_uploader("Upload a CSV file with incident data", type="csv")
+    st.header("Incident Log Analyzer")
+    
+    uploaded_file = st.file_uploader("Upload Incident Log CSV", type="csv")
 
-    if uploaded_file is not None:
-        df = pd.read_csv(uploaded_file)
+    if uploaded_file:
+        try:
+            df = pd.read_csv(uploaded_file)
 
-        if df.empty:
-            st.warning("CSV file is empty.")
-            return
+            st.subheader("Raw Data Preview")
+            st.dataframe(df.head())
 
-        # Display raw table
-        st.dataframe(df)
+            # Key stats
+            st.subheader("Key Stats")
+            total_incidents = len(df)
+            sev_counts = df['severity'].value_counts()
+            avg_resolution_time = df['resolution_time_minutes'].mean()
+            top_causes = df['root_cause'].value_counts().head(3)
 
-        # --- Key Stats ---
-        st.markdown("## 📊 Key Incident Stats")
+            st.markdown(f"**Total Incidents:** {total_incidents}")
+            st.markdown("**Severity Breakdown:**")
+            st.dataframe(sev_counts)
+            st.markdown(f"**Average Resolution Time (mins):** {avg_resolution_time:.2f}")
+            st.markdown("**Top 3 Root Causes:**")
+            st.dataframe(top_causes)
 
-        total_incidents = len(df)
-        avg_duration = df["duration_minutes"].mean()
-        services_affected = df["service"].value_counts()
-        mttr = avg_duration
+            # Change Management Plan Output
+            st.subheader("Change Management Planner")
+            for cause in top_causes.index:
+                st.markdown(f"### Root Cause: {cause}")
+                st.text_area(f"Remediation plan for {cause}", key=cause)
 
-        st.metric("Total Incidents", total_incidents)
-        st.metric("Average Duration (min)", f"{avg_duration:.1f}")
-        st.metric("MTTR", f"{mttr:.1f} minutes")
+        except Exception as e:
+            st.error(f"Error processing file: {e}")
+    else:
+        st.info("Upload a CSV file to begin analysis.")
 
-        st.markdown("### Top 5 Affected Services")
-        st.bar_chart(services_affected.head(5))
 
-        st.markdown("### Most Common Root Causes")
-        st.table(df["root_cause"].value_counts().head(5))
-
-        # --- Change Management Suggestions ---
-        st.markdown("## 🛠️ Change Management Planner")
-
-        high_incident_services = services_affected[services_affected > 2]
-
-        if high_incident_services.empty:
-            st.success("No services flagged for change planning 🎉")
-        else:
-            for service, count in high_incident_services.items():
-                st.markdown(f"### 🔧 {service}")
-                st.write("- 📌 Incident Count:", count)
-                st.write("- 🔁 Consider load balancing, caching, or scaling policies")
-                st.write("- 🔔 Review alert thresholds and reduce false positives")
-                st.write("- 🔒 Check dependency resilience (DBs, APIs, etc.)")
+# Example expected CSV format:
+# incident_id,timestamp,severity,resolution_time_minutes,root_cause
+# 123,2024-07-01 08:00,P1,55,DB outage
