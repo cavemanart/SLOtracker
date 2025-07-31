@@ -1,49 +1,43 @@
 import streamlit as st
 import json
-import os
-from datetime import datetime
+from pathlib import Path
 
-SLO_DATA_FILE = "core/storage/slo_data.json"
+def render_input_slo():
+    st.title("📝 Input SLOs")
+    slo_file = Path("data/slo_data.json")
 
-def load_slo_data():
-    if not os.path.exists(SLO_DATA_FILE) or os.path.getsize(SLO_DATA_FILE) == 0:
-        return []
-    with open(SLO_DATA_FILE, "r") as f:
-        try:
-            return json.load(f)
-        except json.JSONDecodeError:
-            return []
+    with st.form("slo_form"):
+        service = st.text_input("Service Name")
+        description = st.text_input("SLO Description")
+        target = st.slider("SLO Target (%)", min_value=1.0, max_value=99.9, step=0.1)
+        submitted = st.form_submit_button("Add SLO")
 
-def save_slo_data(data):
-    os.makedirs(os.path.dirname(SLO_DATA_FILE), exist_ok=True)
-    with open(SLO_DATA_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+        if submitted:
+            if slo_file.exists():
+                with open(slo_file) as f:
+                    slo_data = json.load(f)
+            else:
+                slo_data = []
 
-def render_slo_input():
-    st.header("🎯 Input New SLO")
-
-    service = st.text_input("Service Name")
-    objective = st.text_input("Objective Description")
-    target = st.slider("Target %", 80, 100, 99)
-    timeframe = st.selectbox("Timeframe", ["7d", "30d", "90d", "180d", "365d"])
-    notes = st.text_area("Notes (Optional)")
-
-    if st.button("➕ Add SLO"):
-        if service and objective:
-            new_slo = {
+            slo_data.append({
                 "service": service,
-                "objective": objective,
+                "description": description,
                 "target": target,
-                "timeframe": timeframe,
-                "notes": notes,
-                "created_at": datetime.utcnow().isoformat()
-            }
+                "sli": None
+            })
 
-            slo_data = load_slo_data()
-            slo_data.append(new_slo)
-            save_slo_data(slo_data)
+            slo_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(slo_file, "w") as f:
+                json.dump(slo_data, f, indent=2)
 
-            st.success("SLO added successfully!")
-            st.experimental_rerun()
-        else:
-            st.warning("Please fill out all required fields.")
+            st.success("SLO added.")
+
+    st.subheader("💡 Suggested SRE SLOs")
+    st.markdown("""
+    - **Availability**: 99.9% uptime for production API
+    - **Latency**: 95% of requests under 200ms
+    - **Error Rate**: Less than 0.1% of failed requests
+    - **Durability**: Zero data loss incidents per quarter
+    - **Throughput**: Sustain 1000 requests/sec
+    """)
+
