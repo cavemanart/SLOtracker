@@ -1,58 +1,55 @@
 import streamlit as st
 import pandas as pd
 
-REQUIRED_COLUMNS = {
-    "Number": "incident_id",
-    "Short description": "short_description",
-    "Service": "system",
-    "Impact Issue Code": "impact",
-    "Duration": "duration_minutes",
-    "Description": "description",
-    "Created": "date"
-}
-
-def map_incident_columns(df):
-    missing = [col for col in REQUIRED_COLUMNS if col not in df.columns]
-    if missing:
-        st.error(f"CSV is missing required columns: {', '.join(missing)}")
-        return None
-
-    mapped_df = df.rename(columns=REQUIRED_COLUMNS)
-    
-    # Ensure 'duration_minutes' is numeric
-    mapped_df["duration_minutes"] = pd.to_numeric(mapped_df["duration_minutes"], errors="coerce")
-
-    # Ensure date column is datetime
-    mapped_df["date"] = pd.to_datetime(mapped_df["date"], errors="coerce")
-
-    return mapped_df
-
 def render_incident_log():
-    st.title("📉 Incident Log & Change Management Planner")
+    st.subheader("Incident Log Analysis")
+    st.write("Upload your incident CSV to view key metrics and planning suggestions.")
+
     uploaded_file = st.file_uploader("Upload Incident CSV", type=["csv"])
 
     if uploaded_file:
-        df_raw = pd.read_csv(uploaded_file)
-        df = map_incident_columns(df_raw)
+        try:
+            df = pd.read_csv(uploaded_file)
 
-        if df is None:
-            return
+            required_columns = [
+                "Number", "Short description", "Caller", "Priority", "State", "Service",
+                "Assignment group", "Assigned to", "Created", "Actions taken",
+                "Business duration", "Business resolve time", "Caused by Change",
+                "Description", "Time worked", "Impact", "Issue Code", "Made SLA",
+                "SLA due", "Severity"
+            ]
 
-        # Key stats
-        st.subheader("📊 Key Incident Statistics")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Total Incidents", len(df))
-        with col2:
-            st.metric("Average Duration (min)", round(df["duration_minutes"].mean(), 2))
-        with col3:
-            st.metric("Most Impacted System", df["system"].mode().iloc[0])
+            missing = [col for col in required_columns if col not in df.columns]
+            if missing:
+                st.error(f"CSV is missing required columns: {', '.join(missing)}")
+                return
 
-        # Change Planner
-        st.subheader("🛠️ Change Management Planner")
-        systems = df["system"].value_counts().reset_index()
-        systems.columns = ["System", "Incident Count"]
-        st.dataframe(systems)
+            # Clean and derive needed fields
+            df["Time worked"] = pd.to_numeric(df["Time worked"], errors="coerce")
+            df["duration_minutes"] = df["Time worked"]  # Assuming it's in minutes already
 
-        st.subheader("📋 Full Incident Table")
-        st.dataframe(df)
+            avg_duration = df["duration_minutes"].mean()
+            total_incidents = len(df)
+            high_impact = df[df["Impact"].str.contains("High", case=False, na=False)]
+            changes_linked = df[df["Caused by Change"].notna() & (df["Caused by Change"] != "")]
+
+            st.metric("Total Incidents", total_incidents)
+            st.metric("Average Duration (min)", round(avg_duration, 2) if not pd.isna(avg_duration) else "N/A")
+            st.metric("High Impact Incidents", len(high_impact))
+            st.metric("Linked to Change", len(changes_linked))
+
+            st.markdown("---")
+            st.subheader("Change Management Planning")
+            if len(changes_linked) > 0:
+                top_change_causes = changes_linked["Caused by Change"].value_counts().head(3)
+                st.write("Top changes associated with incidents:")
+                st.write(top_change_causes)
+            else:
+                st.info("No change-related incidents found.")
+
+            st.markdown("---")
+            if st.checkbox("Show full incident table"):
+                st.dataframe(df)
+
+        except Exception as e:
+            st.error(f"Error processing file: {e}")
