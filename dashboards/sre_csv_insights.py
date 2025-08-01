@@ -5,6 +5,24 @@ def render_bt_csv_insights():
     st.header("📊 Business Transactions Insights")
     st.write("Upload a Business Transactions CSV from AppDynamics.")
 
+    # Let engineer set the SLO threshold and target dynamically:
+    slo_threshold_ms = st.number_input(
+        "Set SLO Threshold (ms)",
+        min_value=1,
+        max_value=10000,
+        value=400,
+        step=10,
+        help="Response time threshold (in ms) for SLO"
+    )
+    slo_target_pct = st.number_input(
+        "Set SLO Target (%)",
+        min_value=0,
+        max_value=100,
+        value=95,
+        step=1,
+        help="Percentage of transactions that should meet the SLO threshold"
+    )
+
     uploaded_file = st.file_uploader("Upload BT CSV", type="csv", key="bt_csv")
     if not uploaded_file:
         return
@@ -34,9 +52,6 @@ def render_bt_csv_insights():
         df["% Slow Transactions"] = pd.to_numeric(df["% Slow Transactions"].str.replace('%', ''), errors='coerce')
         df["% Very Slow Transactions"] = pd.to_numeric(df["% Very Slow Transactions"].str.replace('%', ''), errors='coerce')
         df["End to End Latency Time (ms)"] = pd.to_numeric(df["End to End Latency Time (ms)"], errors='coerce')
-
-        slo_threshold_ms = 400
-        slo_target_pct = 95
 
         st.subheader("📌 High-Level Summary")
 
