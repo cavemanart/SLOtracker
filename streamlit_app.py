@@ -1,6 +1,3 @@
-
-
-
 import streamlit as st
 import pandas as pd
 
@@ -60,6 +57,25 @@ with tab2:
 # ---- TAB 3: Business Transaction Insights ----
 with tab3:
     st.subheader("📥 Upload Business Transactions CSV")
+
+    # Adjustable SLO inputs
+    slo_threshold_ms = st.number_input(
+        "Set SLO Threshold (ms)",
+        min_value=1,
+        max_value=10000,
+        value=400,
+        step=10,
+        help="Response time threshold in ms for SLO"
+    )
+    slo_target_pct = st.number_input(
+        "Set SLO Target (%)",
+        min_value=0,
+        max_value=100,
+        value=95,
+        step=1,
+        help="Percentage of transactions that should meet the SLO threshold"
+    )
+
     uploaded_bt = st.file_uploader("Upload Business Transactions CSV", type=["csv"], key="bt")
 
     if uploaded_bt:
@@ -69,30 +85,52 @@ with tab3:
             st.markdown("### ✅ Raw Data Preview")
             st.dataframe(df.head(20))
 
-            required_cols = ["Name", "Health", "Response Time (ms)", "Calls / min", "Errors / min", "% Errors", "% Slow Transactions", "% Very Slow Transactions"]
+            required_cols = [
+                "Name", "Health", "Response Time (ms)", "Calls / min",
+                "Errors / min", "% Errors", "% Slow Transactions", "% Very Slow Transactions"
+            ]
 
             if all(col in df.columns for col in required_cols):
-                for col in ["Response Time (ms)", "Calls / min", "Errors / min", "% Errors", "% Slow Transactions", "% Very Slow Transactions"]:
+                for col in [
+                    "Response Time (ms)", "Calls / min", "Errors / min",
+                    "% Errors", "% Slow Transactions", "% Very Slow Transactions"
+                ]:
                     df[col] = pd.to_numeric(df[col], errors="coerce")
 
-                slo_violations = df[df["Response Time (ms)"] > 400]
+                slo_violations = df[df["Response Time (ms)"] > slo_threshold_ms]
                 error_transactions = df[df["% Errors"] > 0]
+
+                total_calls = df["Calls / min"].sum()
+                slow_call_sum = slo_violations["Calls / min"].sum()
+                slow_pct = 100 * slow_call_sum / total_calls if total_calls else 0
+                slo_compliant = (100 - slow_pct) >= slo_target_pct
 
                 st.markdown("### 📈 BT Key Insights")
                 st.markdown(f"- Total BTs: **{len(df)}**")
-                st.markdown(f"- Violating SLO (400ms): **{len(slo_violations)}**")
+                st.markdown(f"- Violating SLO ({slo_threshold_ms}ms): **{len(slo_violations)}**")
                 st.markdown(f"- With any errors: **{len(error_transactions)}**")
+                st.markdown(f"- SLO Compliance: **{100 - slow_pct:.2f}%** (target: {slo_target_pct}%)")
 
                 st.markdown("#### 🚨 Worst 5 Response Times")
-                st.dataframe(df.sort_values("Response Time (ms)", ascending=False).head(5)[["Name", "Response Time (ms)", "Health", "% Errors"]])
+                st.dataframe(df.sort_values("Response Time (ms)", ascending=False).head(5)[
+                    ["Name", "Response Time (ms)", "Health", "% Errors"]
+                ])
 
                 st.markdown("#### ❌ Highest Error %")
-                st.dataframe(df.sort_values("% Errors", ascending=False).head(5)[["Name", "% Errors", "Errors / min", "Calls / min"]])
+                st.dataframe(df.sort_values("% Errors", ascending=False).head(5)[
+                    ["Name", "% Errors", "Errors / min", "Calls / min"]
+                ])
 
                 st.markdown("#### 🛠️ BT Recommendations")
                 st.markdown("- Prioritize remediation for transactions with both high response time and high error %.")
                 st.markdown("- Consider alerting on % very slow and stalled transactions.")
                 st.markdown("- Review backend service health where BTs repeatedly show poor performance.")
+
+                if slo_compliant:
+                    st.success("✅ SLO target met!")
+                else:
+                    st.error("❌ SLO target NOT met!")
+
             else:
                 st.warning("CSV missing one or more required columns.")
 
