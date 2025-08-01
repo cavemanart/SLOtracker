@@ -1,101 +1,89 @@
 import streamlit as st
 import pandas as pd
 
-def render_appd_csv_insights():
-    st.title("📊 AppDynamics CSV Insights")
-    uploaded_file = st.file_uploader("Upload AppDynamics Application Dashboard CSV", type="csv")
-    if uploaded_file:
-        df = pd.read_csv(uploaded_file)
-
-        expected_cols = ['Type', 'Call Type', 'Summary', 'Response Time (ms)', 'Calls', 
-                         'Calls / min', 'Errors', 'Errors / min']
-        if not all(col in df.columns for col in expected_cols):
-            st.error("CSV format doesn't match expected structure.")
-            return
-
-        st.subheader("Raw Data")
-        st.dataframe(df)
-
-        st.subheader("🔍 Top 5 Slowest Endpoints")
-        st.dataframe(df.sort_values(by='Response Time (ms)', ascending=False).head(5))
-
-        st.subheader("🚨 Top 5 Error-Prone Endpoints")
-        st.dataframe(df.sort_values(by='Errors / min', ascending=False).head(5))
-
-        st.subheader("✅ Cleanest High-Volume Endpoints")
-        clean = df[(df['Errors'] == 0) & (df['Calls'] > df['Calls'].median())]
-        st.dataframe(clean.sort_values(by='Calls', ascending=False).head(5))
-
-        st.subheader("📈 SLO Suggestions")
-        avg_response = df['Response Time (ms)'].mean()
-        high_latency = df[df['Response Time (ms)'] > 500]
-        error_rate = df['Errors'].sum() / max(df['Calls'].sum(), 1)
-
-        st.markdown(f"""
-- 📌 **Average response time:** {avg_response:.2f} ms  
-- ⚠️ **Endpoints > 500ms:** {len(high_latency)} / {len(df)}  
-- ❗ **Overall error rate:** {error_rate:.2%}  
-- ✅ Suggest target SLO: 95% of endpoints under 500ms  
-        """)
-
 def render_bt_csv_insights():
-    st.title("🧠 Business Transaction Insights")
-    uploaded_file = st.file_uploader("Upload Business Transactions CSV", type="csv")
+    st.header("📊 Business Transactions Insights")
+    st.write("Upload a Business Transactions CSV from AppDynamics.")
+
+    uploaded_file = st.file_uploader("Upload BT CSV", type="csv", key="bt_csv")
     if not uploaded_file:
         return
 
-    df = pd.read_csv(uploaded_file)
+    try:
+        df = pd.read_csv(uploaded_file)
 
-    required_cols = ['Business Transaction', 'Calls', 'Response Time (ms)', 'Errors']
-    if not all(col in df.columns for col in required_cols):
-        st.error(f"CSV is missing required columns. Expected: {required_cols}")
-        return
+        # Normalize column names
+        df.columns = [col.strip() for col in df.columns]
+        required_cols = [
+            "Name", "Response Time (ms)", "Calls / min", "Errors / min",
+            "% Errors", "% Slow Transactions", "% Very Slow Transactions",
+            "Max Response Time (ms)", "End to End Latency Time (ms)", "Transaction Type"
+        ]
 
-    df['Error Rate'] = df['Errors'] / df['Calls'].replace(0, 1)
-    call_median = df['Calls'].median()
+        missing_cols = [col for col in required_cols if col not in df.columns]
+        if missing_cols:
+            st.error(f"Missing required columns: {missing_cols}")
+            return
 
-    st.subheader("📊 Summary")
-    st.markdown(f"""
-    - Total Transactions: **{len(df)}**  
-    - Total Calls: **{df['Calls'].sum():,.0f}**  
-    - Average Latency: **{df['Response Time (ms)'].mean():.2f} ms**  
-    - Total Errors: **{df['Errors'].sum():,.0f}**  
-    - BTs Meeting SLO (≤ 400ms): **{(df['Response Time (ms)'] <= 400).mean() * 100:.2f}%**
-    """)
+        # Clean & convert
+        df["Response Time (ms)"] = pd.to_numeric(df["Response Time (ms)"], errors='coerce')
+        df["Max Response Time (ms)"] = pd.to_numeric(df["Max Response Time (ms)"], errors='coerce')
+        df["Calls / min"] = pd.to_numeric(df["Calls / min"], errors='coerce')
+        df["Errors / min"] = pd.to_numeric(df["Errors / min"], errors='coerce')
+        df["% Errors"] = pd.to_numeric(df["% Errors"].str.replace('%', ''), errors='coerce')
+        df["% Slow Transactions"] = pd.to_numeric(df["% Slow Transactions"].str.replace('%', ''), errors='coerce')
+        df["% Very Slow Transactions"] = pd.to_numeric(df["% Very Slow Transactions"].str.replace('%', ''), errors='coerce')
+        df["End to End Latency Time (ms)"] = pd.to_numeric(df["End to End Latency Time (ms)"], errors='coerce')
 
-    needs_tuning = df[(df['Calls'] > call_median) & (df['Response Time (ms)'] > 400)]
-    monitor = df[(df['Error Rate'] > 0.01) | ((df['Response Time (ms)'] > 350) & (df['Response Time (ms)'] <= 450))]
-    stale = df[(df['Calls'] < call_median) & (df['Response Time (ms)'] > 1000)]
-    healthy = df[(df['Response Time (ms)'] <= 400) & (df['Error Rate'] <= 0.01)]
+        slo_threshold_ms = 400
+        slo_target_pct = 95
 
-    st.subheader("🚨 Needs Tuning")
-    st.dataframe(needs_tuning[['Business Transaction', 'Calls', 'Response Time (ms)', 'Error Rate']])
+        st.subheader("📌 High-Level Summary")
 
-    st.subheader("🧪 Monitor Closely")
-    st.dataframe(monitor[['Business Transaction', 'Calls', 'Response Time (ms)', 'Error Rate']])
+        total_calls = df["Calls / min"].sum()
+        avg_resp = df["Response Time (ms)"].mean()
+        slow_txns = df[df["Response Time (ms)"] > slo_threshold_ms]
+        slow_pct = 100 * slow_txns["Calls / min"].sum() / total_calls if total_calls else 0
 
-    st.subheader("💤 Possibly Stale")
-    st.dataframe(stale[['Business Transaction', 'Calls', 'Response Time (ms)', 'Error Rate']])
+        st.metric("Avg Response Time", f"{avg_resp:.1f} ms")
+        st.metric("Total Calls/min", f"{total_calls:.1f}")
+        st.metric("SLO Target", f"{slo_threshold_ms}ms @ {slo_target_pct}%")
+        st.metric("SLO Compliance", f"{100 - slow_pct:.2f}%")
 
-    st.subheader("✅ Healthy")
-    st.dataframe(healthy[['Business Transaction', 'Calls', 'Response Time (ms)', 'Error Rate']])
+        slo_compliant = (100 - slow_pct) >= slo_target_pct
+        st.success("✅ SLO target met!") if slo_compliant else st.error("❌ SLO target NOT met")
 
-    st.subheader("📌 Recommendations")
-    def recommend(row):
-        name = row['Business Transaction']
-        latency = row['Response Time (ms)']
-        calls = row['Calls']
-        err = row['Error Rate']
+        st.subheader("🚦 Problematic Transactions")
+        outliers = df[
+            (df["Response Time (ms)"] > slo_threshold_ms) |
+            (df["% Errors"] > 1) |
+            (df["% Very Slow Transactions"] > 5)
+        ].sort_values(by="Response Time (ms)", ascending=False)
 
-        if name in needs_tuning['Business Transaction'].values:
-            return f"Tune '{name}': high volume + latency {latency:.0f}ms."
-        elif name in monitor['Business Transaction'].values:
-            return f"Monitor '{name}': err rate {err:.2%}, latency {latency:.0f}ms."
-        elif name in stale['Business Transaction'].values:
-            return f"Review '{name}': low usage + slow response ({latency:.0f}ms)."
-        elif name in healthy['Business Transaction'].values:
-            return f"'{name}' looks healthy."
-        return ""
+        if not outliers.empty:
+            st.dataframe(outliers[[
+                "Transaction Type", "Name", "Response Time (ms)", "% Errors",
+                "% Slow Transactions", "% Very Slow Transactions", "Max Response Time (ms)"
+            ]])
+        else:
+            st.success("No problematic transactions detected.")
 
-    df['Recommendation'] = df.apply(recommend, axis=1)
-    st.dataframe(df[['Business Transaction', 'Recommendation']])
+        st.subheader("🛠 Recommendations for SREs")
+
+        for _, row in outliers.iterrows():
+            st.markdown(f"""
+            - 🔍 **{row['Name']}**  
+              • Response Time: {row['Response Time (ms)']} ms  
+              • Errors: {row['% Errors']}%  
+              • Very Slow: {row['% Very Slow Transactions']}%  
+              👉 *Consider reviewing backend dependencies, increasing resource allocation, or optimizing logic.*
+            """)
+
+        if not slo_compliant:
+            st.warning(f"⚠️ Over {100 - slo_target_pct}% of transactions are above {slo_threshold_ms}ms. Investigate key offenders above.")
+
+        st.subheader("📎 Raw Data (Filtered)")
+        st.dataframe(df.sort_values("Response Time (ms)", ascending=False))
+
+    except Exception as e:
+        st.error(f"Failed to parse CSV: {e}")
