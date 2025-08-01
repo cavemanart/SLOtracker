@@ -18,10 +18,6 @@ def render_appdynamics_dashboard():
     st.subheader("Business Transaction CSV")
     bt_file = st.file_uploader("Upload BT Data CSV", type=["csv"])
     if bt_file:
-        try:
-    df = pd.read_csv(bt_file, encoding="utf-8", on_bad_lines='skip')  # skip problematic rows
-except Exception as e:
-    st.error(f"Failed to read CSV: {e}")
-    return
+        df = pd.read_csv(bt_file)
         st.write(df.head())
         store_uploaded_file(bt_file, subdir="bt")
