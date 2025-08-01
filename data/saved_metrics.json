@@ -1,0 +1,22 @@
+{
+  "custom_metrics": [
+    {
+      "name": "Availability",
+      "target": 99.9,
+      "unit": "%",
+      "description": "Percentage of time the service is available"
+    },
+    {
+      "name": "Latency",
+      "target": 250,
+      "unit": "ms",
+      "description": "95th percentile response time"
+    },
+    {
+      "name": "Error Rate",
+      "target": 1,
+      "unit": "%",
+      "description": "Total error percentage threshold"
+    }
+  ]
+}
