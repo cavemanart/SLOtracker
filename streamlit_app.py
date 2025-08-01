@@ -1,16 +1,125 @@
 import streamlit as st
 import pandas as pd
+import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="SLO Tracker", layout="wide")
-
 st.title("📊 SLO Tracker Dashboard")
+
+# Helper function to extract prefix from transaction name
+def extract_prefix(name):
+    if isinstance(name, str):
+        parts = name.strip("/").split("/")
+        if len(parts) > 0:
+            return parts[0]
+    return name
 
 tab1, tab2, tab3 = st.tabs(["SLO Dashboard", "AppD CSV Insights", "BT Insights"])
 
-# ---- TAB 1: Placeholder for SLO Dashboard ----
+# ---- TAB 1: Smart SLO Tracker Dashboard ----
 with tab1:
-    st.subheader("SLO Dashboard (coming soon)")
-    st.markdown("This will visualize and summarize service level objectives using real metrics.")
+    st.subheader("📈 SLO Tracker Dashboard")
+
+    # Try to get BT data from session or ask user to upload
+    df_bt = st.session_state.get("bt_data")
+
+    if df_bt is None:
+        uploaded_bt = st.file_uploader(
+            "Upload Business Transactions CSV for SLO analysis (or upload in BT Insights tab)",
+            type=["csv"],
+            key="bt_dash_upload"
+        )
+        if uploaded_bt:
+            try:
+                df_bt = pd.read_csv(uploaded_bt)
+                st.session_state["bt_data"] = df_bt
+                st.success("Business Transactions data loaded.")
+            except Exception as e:
+                st.error(f"Failed to load CSV: {e}")
+        else:
+            st.info("Please upload a Business Transactions CSV on this tab or the BT Insights tab.")
+    else:
+        st.success("Business Transactions data loaded from session.")
+
+    if df_bt is not None:
+        # Clean columns
+        required_cols = [
+            "Name", "Response Time (ms)", "Calls / min",
+            "Errors / min", "% Errors", "% Slow Transactions", "% Very Slow Transactions"
+        ]
+        if not all(col in df_bt.columns for col in required_cols):
+            st.error(f"CSV missing one or more required columns: {required_cols}")
+        else:
+            # Clean & convert types
+            for col in [
+                "Response Time (ms)", "Calls / min", "Errors / min",
+                "% Errors", "% Slow Transactions", "% Very Slow Transactions"
+            ]:
+                if col == "% Errors" and df_bt[col].dtype == "object":
+                    df_bt[col] = pd.to_numeric(df_bt[col].str.replace("%", ""), errors="coerce")
+                else:
+                    df_bt[col] = pd.to_numeric(df_bt[col], errors="coerce")
+
+            # Granularity selector
+            granularity = st.selectbox(
+                "Select Granularity Level for Transaction Names",
+                options=["Exact", "By Path Prefix"],
+                index=0
+            )
+
+            if granularity == "By Path Prefix":
+                df_bt["GroupName"] = df_bt["Name"].apply(extract_prefix)
+            else:
+                df_bt["GroupName"] = df_bt["Name"]
+
+            # Aggregate by GroupName
+            grouped = df_bt.groupby("GroupName").agg({
+                "Response Time (ms)": "mean",
+                "Calls / min": "sum",
+                "% Errors": "mean",
+                "% Slow Transactions": "mean",
+                "% Very Slow Transactions": "mean"
+            }).reset_index()
+
+            # SLO inputs
+            slo_response_time = st.number_input(
+                "SLO Response Time Threshold (ms)",
+                min_value=1,
+                max_value=10000,
+                value=400,
+                step=10
+            )
+            slo_error_pct = st.number_input(
+                "SLO Error Rate Threshold (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=1.0,
+                format="%.2f"
+            )
+
+            # Find violating groups
+            violating_resp = grouped[grouped["Response Time (ms)"] > slo_response_time]
+            violating_error = grouped[grouped["% Errors"] > slo_error_pct]
+
+            st.markdown(f"### Services violating Response Time SLO (> {slo_response_time} ms): {len(violating_resp)}")
+            st.dataframe(violating_resp[["GroupName", "Response Time (ms)", "Calls / min"]].sort_values("Response Time (ms)", ascending=False))
+
+            st.markdown(f"### Services violating Error Rate SLO (> {slo_error_pct} %): {len(violating_error)}")
+            st.dataframe(violating_error[["GroupName", "% Errors", "Calls / min"]].sort_values("% Errors", ascending=False))
+
+            if len(violating_resp) > 0 or len(violating_error) > 0:
+                st.warning("⚠️ Some services are violating your SLOs. Consider investigating these to improve system health.")
+            else:
+                st.success("✅ All services meet current SLO targets!")
+
+            # Visualization: Response Time distribution histogram
+            st.markdown("### Response Time Distribution")
+            fig, ax = plt.subplots(figsize=(8, 4))
+            ax.hist(grouped["Response Time (ms)"].dropna(), bins=30, color="skyblue", edgecolor="black")
+            ax.axvline(slo_response_time, color="red", linestyle="--", label="SLO Threshold")
+            ax.set_xlabel("Response Time (ms)")
+            ax.set_ylabel("Number of Groups")
+            ax.legend()
+            st.pyplot(fig)
 
 # ---- TAB 2: AppDynamics CSV Insights ----
 with tab2:
@@ -65,7 +174,7 @@ with tab3:
         max_value=10000,
         value=400,
         step=10,
-        help="Response time threshold in ms for SLO"
+        key="bt_slo_threshold"
     )
     slo_target_pct = st.number_input(
         "Set SLO Target (%)",
@@ -73,7 +182,14 @@ with tab3:
         max_value=100,
         value=95,
         step=1,
-        help="Percentage of transactions that should meet the SLO threshold"
+        key="bt_slo_target"
+    )
+
+    granularity = st.selectbox(
+        "Select Granularity Level for Transaction Names",
+        options=["Exact", "By Path Prefix"],
+        index=0,
+        key="bt_granularity"
     )
 
     uploaded_bt = st.file_uploader("Upload Business Transactions CSV", type=["csv"], key="bt")
@@ -81,6 +197,7 @@ with tab3:
     if uploaded_bt:
         try:
             df = pd.read_csv(uploaded_bt)
+            st.session_state["bt_data"] = df  # persist for tab1 reuse
 
             st.markdown("### ✅ Raw Data Preview")
             st.dataframe(df.head(20))
@@ -95,30 +212,48 @@ with tab3:
                     "Response Time (ms)", "Calls / min", "Errors / min",
                     "% Errors", "% Slow Transactions", "% Very Slow Transactions"
                 ]:
-                    df[col] = pd.to_numeric(df[col], errors="coerce")
+                    if col == "% Errors" and df[col].dtype == "object":
+                        df[col] = pd.to_numeric(df[col].str.replace("%", ""), errors="coerce")
+                    else:
+                        df[col] = pd.to_numeric(df[col], errors="coerce")
 
-                slo_violations = df[df["Response Time (ms)"] > slo_threshold_ms]
-                error_transactions = df[df["% Errors"] > 0]
+                # Apply granularity grouping
+                if granularity == "By Path Prefix":
+                    df["GroupName"] = df["Name"].apply(extract_prefix)
+                else:
+                    df["GroupName"] = df["Name"]
 
-                total_calls = df["Calls / min"].sum()
-                slow_call_sum = slo_violations["Calls / min"].sum()
-                slow_pct = 100 * slow_call_sum / total_calls if total_calls else 0
+                grouped = df.groupby("GroupName").agg({
+                    "Response Time (ms)": "mean",
+                    "Calls / min": "sum",
+                    "% Errors": "mean",
+                    "% Slow Transactions": "mean",
+                    "% Very Slow Transactions": "mean"
+                }).reset_index()
+
+                # Compute SLO compliance
+                slo_violations = grouped[grouped["Response Time (ms)"] > slo_threshold_ms]
+                total_calls = grouped["Calls / min"].sum()
+                slow_calls_sum = slo_violations["Calls / min"].sum()
+                slow_pct = 100 * slow_calls_sum / total_calls if total_calls else 0
                 slo_compliant = (100 - slow_pct) >= slo_target_pct
 
+                error_transactions = grouped[grouped["% Errors"] > 0]
+
                 st.markdown("### 📈 BT Key Insights")
-                st.markdown(f"- Total BTs: **{len(df)}**")
+                st.markdown(f"- Total BT groups: **{len(grouped)}**")
                 st.markdown(f"- Violating SLO ({slo_threshold_ms}ms): **{len(slo_violations)}**")
                 st.markdown(f"- With any errors: **{len(error_transactions)}**")
                 st.markdown(f"- SLO Compliance: **{100 - slow_pct:.2f}%** (target: {slo_target_pct}%)")
 
                 st.markdown("#### 🚨 Worst 5 Response Times")
-                st.dataframe(df.sort_values("Response Time (ms)", ascending=False).head(5)[
-                    ["Name", "Response Time (ms)", "Health", "% Errors"]
+                st.dataframe(grouped.sort_values("Response Time (ms)", ascending=False).head(5)[
+                    ["GroupName", "Response Time (ms)", "% Errors"]
                 ])
 
                 st.markdown("#### ❌ Highest Error %")
-                st.dataframe(df.sort_values("% Errors", ascending=False).head(5)[
-                    ["Name", "% Errors", "Errors / min", "Calls / min"]
+                st.dataframe(grouped.sort_values("% Errors", ascending=False).head(5)[
+                    ["GroupName", "% Errors", "Calls / min"]
                 ])
 
                 st.markdown("#### 🛠️ BT Recommendations")
