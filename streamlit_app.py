@@ -3,95 +3,111 @@ import pandas as pd
 
 st.set_page_config(page_title="SLO Tracker", layout="wide")
 
-st.title("📊 SLO Tracker Dashboard")
+def load_bt_csv(file):
+    df = pd.read_csv(file)
+    df.columns = [col.strip() for col in df.columns]
+    return df
 
-tab1, tab2, tab3 = st.tabs(["SLO Dashboard", "AppD CSV Insights", "BT Insights"])
+def analyze_bt_data(df, slo_targets):
+    insights = []
 
-# ---- TAB 1: Placeholder for SLO Dashboard ----
-with tab1:
-    st.subheader("SLO Dashboard (coming soon)")
-    st.markdown("This will visualize and summarize service level objectives using real metrics.")
+    for _, row in df.iterrows():
+        name = row.get("Name", "Unnamed")
+        resp_time = row.get("Response Time (ms)", 0)
+        calls_per_min = row.get("Calls / min", 0)
+        errors_per_min = row.get("Errors / min", 0)
+        error_pct = row.get("% Errors", 0)
+        very_slow_pct = row.get("% Very Slow Transactions", 0)
+        max_resp_time = row.get("Max Response Time (ms)", 0)
+        wait_time = row.get("Wait Time (ms)", 0)
 
-# ---- TAB 2: AppDynamics CSV Insights ----
-with tab2:
-    st.subheader("📥 Upload AppDynamics CSV")
-    uploaded_appd = st.file_uploader("Upload AppDynamics Summary CSV", type=["csv"], key="appd")
+        slo = slo_targets.get(name, {"target_ms": 400, "target_pct": 95})
 
-    if uploaded_appd:
-        try:
-            df = pd.read_csv(uploaded_appd)
+        slo_target_ms = slo["target_ms"]
+        slo_target_pct = slo["target_pct"]
 
-            st.markdown("### ✅ Raw Data Preview")
-            st.dataframe(df.head(20))
+        slo_violated = resp_time > slo_target_ms
+        recommendations = []
 
-            if "Response Time (ms)" in df.columns and "Call / min" in df.columns:
-                df["Response Time (ms)"] = pd.to_numeric(df["Response Time (ms)"], errors="coerce")
-                df["Call / min"] = pd.to_numeric(df["Call / min"], errors="coerce")
+        if slo_violated:
+            recommendations.append(f"🔴 Avg response time {resp_time:.0f}ms > SLO of {slo_target_ms}ms.")
+        if error_pct > 1:
+            recommendations.append(f"⚠️ High error rate: {error_pct:.2f}%. Investigate upstream services.")
+        if very_slow_pct > (100 - slo_target_pct):
+            recommendations.append(f"⚠️ {very_slow_pct:.2f}% very slow transactions exceed SLO target.")
+        if wait_time > 100:
+            recommendations.append(f"🕒 High wait time: {wait_time}ms. Consider threadpool tuning or DB optimization.")
+        if max_resp_time > 2 * resp_time:
+            recommendations.append(f"📈 Max response time {max_resp_time}ms is much higher than avg. Look into outliers.")
 
-                high_latency = df[df["Response Time (ms)"] > 400]
-                error_prone = df[df["Errors"] > 0]
+        insights.append({
+            "Transaction": name,
+            "Response Time (ms)": resp_time,
+            "Calls / min": calls_per_min,
+            "Errors / min": errors_per_min,
+            "% Errors": error_pct,
+            "% Very Slow Transactions": very_slow_pct,
+            "Max Response Time (ms)": max_resp_time,
+            "SLO Target (ms)": slo_target_ms,
+            "SLO Violated": "✅" if not slo_violated else "❌",
+            "Recommendations": recommendations or ["✅ No major issues detected."],
+        })
 
-                st.markdown("### 📈 Key Insights")
-                st.markdown(f"- Total services: **{len(df)}**")
-                st.markdown(f"- Services over 400ms (SLO violation): **{len(high_latency)}**")
-                st.markdown(f"- Services with errors: **{len(error_prone)}**")
+    return pd.DataFrame(insights)
 
-                worst_latency = df.sort_values("Response Time (ms)", ascending=False).head(5)
-                st.markdown("#### 🚨 Top 5 Slowest Services")
-                st.dataframe(worst_latency[["Summary", "Response Time (ms)", "Call / min", "Errors"]])
 
-                most_errors = df.sort_values("Errors", ascending=False).head(5)
-                st.markdown("#### ❌ Top 5 Most Error-Prone Services")
-                st.dataframe(most_errors[["Summary", "Errors", "Errors / min", "Call / min"]])
+def render_slo_dashboard(bt_df):
+    st.header("📊 SLO Dashboard")
 
-                st.markdown("#### 🛠️ Recommendations")
-                if not high_latency.empty:
-                    st.markdown("- Investigate services with response time consistently over 400ms.")
-                if not error_prone.empty:
-                    st.markdown("- Review error logs or implement retries for error-prone calls.")
-                st.markdown("- Consider scaling high-traffic services or load-testing slow endpoints.")
+    with st.expander("🔧 Define SLO Targets Per Transaction", expanded=False):
+        slo_targets = {}
+        for name in bt_df["Name"].dropna().unique():
+            col1, col2 = st.columns(2)
+            with col1:
+                ms = st.number_input(f"{name} - Target ms", value=400, key=f"{name}_ms")
+            with col2:
+                pct = st.number_input(f"{name} - Target %", value=95, min_value=80, max_value=100, key=f"{name}_pct")
+            slo_targets[name] = {"target_ms": ms, "target_pct": pct}
+    st.divider()
 
-        except Exception as e:
-            st.error(f"Failed to read AppDynamics CSV: {e}")
+    result_df = analyze_bt_data(bt_df, slo_targets)
 
-# ---- TAB 3: Business Transaction Insights ----
-with tab3:
-    st.subheader("📥 Upload Business Transactions CSV")
-    uploaded_bt = st.file_uploader("Upload Business Transactions CSV", type=["csv"], key="bt")
+    st.dataframe(result_df[[
+        "Transaction", "Response Time (ms)", "SLO Target (ms)", "SLO Violated", "% Errors",
+        "% Very Slow Transactions", "Max Response Time (ms)"
+    ]], use_container_width=True)
 
-    if uploaded_bt:
-        try:
-            df = pd.read_csv(uploaded_bt)
+    st.subheader("📌 Recommendations")
+    for _, row in result_df.iterrows():
+        st.markdown(f"**{row['Transaction']}**")
+        for r in row["Recommendations"]:
+            st.markdown(f"- {r}")
+        st.markdown("---")
 
-            st.markdown("### ✅ Raw Data Preview")
-            st.dataframe(df.head(20))
 
-            required_cols = ["Name", "Health", "Response Time (ms)", "Calls / min", "Errors / min", "% Errors", "% Slow Transactions", "% Very Slow Transactions"]
+def render_bt_insights():
+    st.header("🔍 Business Transaction Insights")
+    uploaded_file = st.file_uploader("Upload BT CSV", type=["csv"])
+    if uploaded_file:
+        bt_df = load_bt_csv(uploaded_file)
+        st.subheader("Raw Preview")
+        st.dataframe(bt_df.head(20), use_container_width=True)
 
-            if all(col in df.columns for col in required_cols):
-                for col in ["Response Time (ms)", "Calls / min", "Errors / min", "% Errors", "% Slow Transactions", "% Very Slow Transactions"]:
-                    df[col] = pd.to_numeric(df[col], errors="coerce")
+        render_slo_dashboard(bt_df)
 
-                slo_violations = df[df["Response Time (ms)"] > 400]
-                error_transactions = df[df["% Errors"] > 0]
 
-                st.markdown("### 📈 BT Key Insights")
-                st.markdown(f"- Total BTs: **{len(df)}**")
-                st.markdown(f"- Violating SLO (400ms): **{len(slo_violations)}**")
-                st.markdown(f"- With any errors: **{len(error_transactions)}**")
+def main():
+    st.title("📈 SLO Tracker + AppDynamics BT Analyzer")
 
-                st.markdown("#### 🚨 Worst 5 Response Times")
-                st.dataframe(df.sort_values("Response Time (ms)", ascending=False).head(5)[["Name", "Response Time (ms)", "Health", "% Errors"]])
+    tab1, tab2 = st.tabs(["📊 SLO Dashboard", "🔍 BT Insights"])
 
-                st.markdown("#### ❌ Highest Error %")
-                st.dataframe(df.sort_values("% Errors", ascending=False).head(5)[["Name", "% Errors", "Errors / min", "Calls / min"]])
+    with tab1:
+        st.info("Load BT data from the BT Insights tab to populate SLO Dashboard.")
+        st.markdown("➡️ Go to **BT Insights** tab to upload a Business Transaction CSV and view analysis.")
+    
+    with tab2:
+        render_bt_insights()
 
-                st.markdown("#### 🛠️ BT Recommendations")
-                st.markdown("- Prioritize remediation for transactions with both high response time and high error %.")
-                st.markdown("- Consider alerting on % very slow and stalled transactions.")
-                st.markdown("- Review backend service health where BTs repeatedly show poor performance.")
-            else:
-                st.warning("CSV missing one or more required columns.")
 
-        except Exception as e:
-            st.error(f"Failed to read Business Transactions CSV: {e}")
+if __name__ == "__main__":
+    main()
