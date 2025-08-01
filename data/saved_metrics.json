@@ -1,22 +1,32 @@
-{
-  "custom_metrics": [
-    {
-      "name": "Availability",
-      "target": 99.9,
-      "unit": "%",
-      "description": "Percentage of time the service is available"
-    },
-    {
-      "name": "Latency",
-      "target": 250,
-      "unit": "ms",
-      "description": "95th percentile response time"
-    },
-    {
-      "name": "Error Rate",
-      "target": 1,
-      "unit": "%",
-      "description": "Total error percentage threshold"
-    }
-  ]
-}
+[
+  {
+    "timestamp": "2025-07-01T08:00:00",
+    "value": 99.9,
+    "name": "uptime"
+  },
+  {
+    "timestamp": "2025-07-02T08:00:00",
+    "value": 98.5,
+    "name": "uptime"
+  },
+  {
+    "timestamp": "2025-07-01T08:00:00",
+    "value": 250,
+    "name": "latency_ms"
+  },
+  {
+    "timestamp": "2025-07-02T08:00:00",
+    "value": 220,
+    "name": "latency_ms"
+  },
+  {
+    "timestamp": "2025-07-03T08:00:00",
+    "value": 100,
+    "name": "uptime"
+  },
+  {
+    "timestamp": "2025-07-03T08:00:00",
+    "value": 210,
+    "name": "latency_ms"
+  }
+]
