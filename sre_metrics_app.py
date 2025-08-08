@@ -1,20 +1,26 @@
-
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 from fpdf import FPDF
 import os
+from io import BytesIO
 
 DATA_FILE = "metrics_data.csv"
 
+def get_data_file_path():
+    # Make sure file path is absolute relative to this script
+    return os.path.join(os.path.dirname(__file__), DATA_FILE)
+
 def load_data():
-    if os.path.exists(DATA_FILE):
-        return pd.read_csv(DATA_FILE)
+    path = get_data_file_path()
+    if os.path.exists(path):
+        return pd.read_csv(path)
     else:
         return pd.DataFrame(columns=["Service", "Metric Type", "Metric Name", "Definition", "Target", "Current Value", "Owner", "Last Updated"])
 
 def save_data(df):
-    df.to_csv(DATA_FILE, index=False)
+    path = get_data_file_path()
+    df.to_csv(path, index=False)
 
 def export_pdf(df):
     pdf = FPDF()
@@ -25,7 +31,11 @@ def export_pdf(df):
         for col in df.columns:
             pdf.cell(200, 10, txt=f"{col}: {row[col]}", ln=True)
         pdf.cell(200, 10, txt="-----------------------------", ln=True)
-    pdf.output("SRE_Metrics_Report.pdf")
+    # Save PDF to bytes buffer
+    pdf_buffer = BytesIO()
+    pdf.output(pdf_buffer)
+    pdf_buffer.seek(0)
+    return pdf_buffer
 
 st.title("SRE Metrics Analyzer")
 
@@ -51,23 +61,22 @@ with st.form("metric_form"):
             "Target": target,
             "Current Value": current_value,
             "Owner": owner,
-            "Last Updated": last_updated
+            "Last Updated": last_updated.strftime("%Y-%m-%d")  # convert to string
         }
         df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
         save_data(df)
         st.success("Metric added successfully!")
+        st.experimental_rerun()  # reload the app to show updated table
 
 st.subheader("Current Metrics")
 st.dataframe(df)
 
 st.subheader("Export Options")
-if st.button("Download CSV"):
-    df.to_csv("SRE_Metrics_Export.csv", index=False)
-    st.success("CSV file exported.")
+csv_data = df.to_csv(index=False).encode('utf-8')
+st.download_button("Download CSV", data=csv_data, file_name="SRE_Metrics_Export.csv", mime='text/csv')
 
-if st.button("Download PDF Report"):
-    export_pdf(df)
-    st.success("PDF report generated.")
+pdf_buffer = export_pdf(df)
+st.download_button("Download PDF Report", data=pdf_buffer, file_name="SRE_Metrics_Report.pdf", mime='application/pdf')
 
 st.subheader("Dashboard View")
 metric_counts = df["Metric Type"].value_counts()
