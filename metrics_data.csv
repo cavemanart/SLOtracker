@@ -1,0 +1,4 @@
+Service,Metric Type,Metric Name,Definition,Target,Current Value,Owner,Last Updated
+Auth Service,SLA,Availability,Percentage of time service is available,99.95%,99.7%,Alice,2023-11-01
+Payment API,SLO,Latency,P99 response time for API calls,<500ms,620ms,Bob,2023-11-02
+Backup System,KPI,Backup Success Rate,Percentage of successful backups,99.9%,98.5%,Charlie,2023-11-03
